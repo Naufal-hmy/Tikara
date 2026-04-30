@@ -28,6 +28,10 @@ export default function RegisterScreen() {
             Alert.alert('Error', 'Semua data wajib diisi!');
             return;
         }
+        if (password.length < 6) {
+            Alert.alert('Error', 'Password harus minimal 6 karakter!');
+            return;
+        }
         if (password !== confirmPassword) {
             Alert.alert('Error', 'Password tidak cocok!');
             return;

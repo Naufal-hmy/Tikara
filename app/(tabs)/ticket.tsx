@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useState, useCallback } from 'react';
 import {
     Dimensions,
     ScrollView,
@@ -12,9 +13,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
+import { orderService } from '../../services/orderService';
+
 export default function TicketScreen() {
     // State untuk switch tab: 'upcoming' atau 'finished'
     const [activeTab, setActiveTab] = useState('upcoming');
+    const [tickets, setTickets] = useState<any[]>([]);
+
+    // Refresh tiket setiap kali layar difokuskan (misal setelah checkout)
+    useFocusEffect(
+        useCallback(() => {
+            orderService.getMyTickets().then(setTickets);
+        }, [])
+    );
+
+    const displayedTickets = tickets.filter(t => activeTab === 'upcoming' ? !t.is_checked_in : t.is_checked_in);
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -45,34 +58,38 @@ export default function TicketScreen() {
                 {activeTab === 'upcoming' ? (
                     // TAMPILAN TIKET AKAN DATANG
                     <View style={styles.listContainer}>
-                        <TicketCard
-                            title="Cakra Khan: Symphony of giving"
-                            date="31 Desember 2025"
-                            location="Bandung Convention Center"
-                            type="Silver"
-                            status="Terverifikasi"
-                            isUpcoming={true}
-                        />
+                        {displayedTickets.length === 0 && <Text style={{textAlign: 'center', marginTop: 20}}>Belum ada tiket.</Text>}
+                        {displayedTickets.map(order => (
+                            <TicketCard
+                                key={order.id}
+                                id={order.id}
+                                title={order.events?.title}
+                                date={order.events?.date}
+                                location={order.events?.location}
+                                type={`${order.quantity} Tiket`}
+                                status="Terverifikasi"
+                                isUpcoming={true}
+                                orderId={order.id.slice(0, 8).toUpperCase()}
+                            />
+                        ))}
                     </View>
                 ) : (
                     // TAMPILAN TIKET SELESAI
                     <View style={styles.listContainer}>
-                        <TicketCard
-                            title="Cakra Khan: Symphony of giving"
-                            date="31 Desember 2025"
-                            location="Bandung Convention Center"
-                            type="Silver"
-                            status="Selesai"
-                            isUpcoming={false}
-                        />
-                        <TicketCard
-                            title="Cakra Khan: Symphony of giving"
-                            date="31 Desember 2025"
-                            location="Bandung Convention Center"
-                            type="Silver"
-                            status="Selesai"
-                            isUpcoming={false}
-                        />
+                        {displayedTickets.length === 0 && <Text style={{textAlign: 'center', marginTop: 20}}>Belum ada tiket selesai.</Text>}
+                        {displayedTickets.map(order => (
+                            <TicketCard
+                                key={order.id}
+                                id={order.id}
+                                title={order.events?.title}
+                                date={order.events?.date}
+                                location={order.events?.location}
+                                type={`${order.quantity} Tiket`}
+                                status="Selesai"
+                                isUpcoming={false}
+                                orderId={order.id.slice(0, 8).toUpperCase()}
+                            />
+                        ))}
                     </View>
                 )}
 
@@ -82,9 +99,9 @@ export default function TicketScreen() {
 }
 
 // --- KOMPONEN KARTU TIKET ---
-const TicketCard = ({ title, date, location, type, status, isUpcoming }) => {
+const TicketCard = ({ id, title, date, location, type, status, isUpcoming, orderId }: { id: string, title: string, date: string, location: string, type: string, status: string, isUpcoming: boolean, orderId?: string }) => {
     return (
-        <View style={styles.ticketWrapper}>
+        <TouchableOpacity style={styles.ticketWrapper} onPress={() => router.push({ pathname: '/ticket-detail', params: { id } })}>
             {/* Bagian Atas (Biru Muda) */}
             <View style={styles.ticketHeader}>
                 <Text style={styles.ticketTitle}>{title}</Text>
@@ -112,14 +129,14 @@ const TicketCard = ({ title, date, location, type, status, isUpcoming }) => {
                     // Jika Akan Datang: Muncul QR Code
                     <View style={styles.qrContainer}>
                         <MaterialCommunityIcons name="qrcode-scan" size={100} color="#000" />
-                        <Text style={styles.orderId}>Order ID: 113350TIX01</Text>
+                        <Text style={styles.orderId}>Order ID: {orderId || '113350TIX01'}</Text>
                     </View>
                 ) : (
                     // Jika Selesai: Hanya Order ID
-                    <Text style={styles.orderIdFinished}>Order ID: 113350TIX01</Text>
+                    <Text style={styles.orderIdFinished}>Order ID: {orderId || '113350TIX01'}</Text>
                 )}
             </View>
-        </View>
+        </TouchableOpacity>
     );
 };
 

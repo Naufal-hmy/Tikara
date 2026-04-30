@@ -1,19 +1,115 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React, { useState } from 'react';
+import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Image,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  FlatList,
+  Pressable
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { eventService } from '../../services/eventService';
+import { orderService } from '../../services/orderService';
+
+const ALL_CATEGORIES = ['Semua', 'Musik', 'Festival', 'Teater', 'Seni', 'Seminar'];
 
 export default function ExploreScreen() {
-  const [searchText, setSearchText] = useState('');
+  const { search } = useLocalSearchParams();
+  const [searchText, setSearchText] = useState((search as string) || '');
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [popularSearches, setPopularSearches] = useState<string[]>([]);
+  const [bookmarkedIds, setBookmarkedIds] = useState<Set<number>>(new Set());
+
+  // Filter state
+  const [selectedCategory, setSelectedCategory] = useState('Semua');
+  const [selectedLocation, setSelectedLocation] = useState('Semua');
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showLocationModal, setShowLocationModal] = useState(false);
+
+  useEffect(() => {
+    if (search) setSearchText(search as string);
+  }, [search]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadEvents();
+      loadBookmarks();
+      orderService.getPopularTitles().then(setPopularSearches);
+    }, [])
+  );
+
+  // Ketika search dari params berubah, reset filters
+  useEffect(() => {
+    if (search) {
+      // Cek apakah search param cocok dengan salah satu kategori
+      const matchedCategory = ALL_CATEGORIES.find(
+        c => c.toLowerCase() === (search as string).toLowerCase()
+      );
+      if (matchedCategory) {
+        setSelectedCategory(matchedCategory);
+        setSearchText('');
+      } else {
+        setSearchText(search as string);
+        setSelectedCategory('Semua');
+      }
+    }
+  }, [search]);
+
+  const loadEvents = async () => {
+    try {
+      setLoading(true);
+      const data = await eventService.getAllEvents();
+      setEvents(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadBookmarks = async () => {
+    const bmIds = await eventService.getBookmarkedEventIds();
+    setBookmarkedIds(bmIds);
+  };
+
+  const handleToggleBookmark = async (eventId: number) => {
+    const result = await eventService.toggleBookmark(eventId);
+    setBookmarkedIds(prev => {
+      const next = new Set(prev);
+      if (result) {
+        next.add(eventId);
+      } else {
+        next.delete(eventId);
+      }
+      return next;
+    });
+  };
+
+  // Kumpulkan lokasi unik dari events
+  const uniqueLocations = ['Semua', ...Array.from(new Set(events.map(e => e.location).filter(Boolean)))];
+
+  // Filter events berdasarkan searchText, category, dan location
+  const filteredEvents = events.filter(e => {
+    const matchesSearch = searchText.length === 0 || 
+      e.title.toLowerCase().includes(searchText.toLowerCase()) ||
+      e.location?.toLowerCase().includes(searchText.toLowerCase()) ||
+      e.category?.toLowerCase().includes(searchText.toLowerCase());
+    
+    const matchesCategory = selectedCategory === 'Semua' || 
+      e.category?.toLowerCase() === selectedCategory.toLowerCase();
+
+    const matchesLocation = selectedLocation === 'Semua' ||
+      e.location?.toLowerCase() === selectedLocation.toLowerCase();
+
+    return matchesSearch && matchesCategory && matchesLocation;
+  });
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -27,55 +123,123 @@ export default function ExploreScreen() {
             placeholder="Cari event, artis dan kota"
             placeholderTextColor="#A0A0A0"
             value={searchText}
-            onChangeText={setSearchText}
+            onChangeText={(text) => {
+              setSearchText(text);
+            }}
           />
+          {searchText.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchText('')}>
+              <MaterialCommunityIcons name="close-circle" size={20} color="#A0A0A0" />
+            </TouchableOpacity>
+          )}
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
-          {/* Pencarian Populer (History) */}
+          {/* Pencarian Populer */}
           <Text style={styles.sectionTitle}>Pencarian Populer</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-            <SearchChip text="Coldplay" />
-            <SearchChip text="Jaz Festival" />
+            {popularSearches.map(term => (
+               <SearchChip 
+                 key={term} 
+                 text={term} 
+                 onPress={() => setSearchText(term)} 
+                 onDelete={() => setPopularSearches(prev => prev.filter(p => p !== term))} 
+               />
+            ))}
           </ScrollView>
 
-          {/* Filter Bar (Kategori, Lokasi, Harga) */}
-          <Text style={styles.sectionTitle}>Pencarian Populer</Text>
+          {/* Filter Bar (Kategori, Lokasi) */}
+          <Text style={styles.sectionTitle}>Filter</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScroll}>
-            <TouchableOpacity style={styles.filterIconBtn}>
+            <TouchableOpacity style={styles.filterIconBtn} onPress={() => {
+              setSelectedCategory('Semua');
+              setSelectedLocation('Semua');
+              setSearchText('');
+            }}>
               <MaterialCommunityIcons name="tune-vertical" size={20} color="#333" />
             </TouchableOpacity>
-            <FilterChip text="Kategori" />
-            <FilterChip text="Lokasi" />
-            <FilterChip text="Harga" />
-            <FilterChip text="Tanggal" />
+            <FilterChip 
+              text={selectedCategory === 'Semua' ? 'Kategori' : selectedCategory} 
+              active={selectedCategory !== 'Semua'}
+              onPress={() => setShowCategoryModal(true)} 
+            />
+            <FilterChip 
+              text={selectedLocation === 'Semua' ? 'Lokasi' : selectedLocation} 
+              active={selectedLocation !== 'Semua'}
+              onPress={() => setShowLocationModal(true)} 
+            />
           </ScrollView>
 
           {/* List Event (Vertical) */}
           <View style={styles.listContainer}>
-            <EventListCard
-              image="https://picsum.photos/200/200?random=10"
-              title="Cakra Khan: Symphony of giving"
-              category="Musik"
-              promotor="Abogrup"
-              location="Bandung, Jawa Barat"
-              date="31 Desember 2025"
-              price="IDR 960.000"
-            />
-            <EventListCard
-              image="https://picsum.photos/200/200?random=11"
-              title="Cakra Khan: Symphony of giving"
-              category="Jazz"
-              promotor="Abogrup"
-              location="Bandung, Jawa Barat"
-              date="31 Desember 2025"
-              price="IDR 960.000"
-            />
+            {loading ? (
+              <Text style={{ textAlign: 'center', marginTop: 20 }}>Memuat...</Text>
+            ) : filteredEvents.length === 0 ? (
+              <Text style={{ textAlign: 'center', marginTop: 20, color: '#999' }}>Tidak ada event ditemukan.</Text>
+            ) : filteredEvents.map((eventData: any) => (
+              <EventListCard
+                key={eventData.id}
+                id={eventData.id}
+                image={eventData.image_url}
+                title={eventData.title}
+                category={eventData.category || 'Event'}
+                promotor="Tikara Partner"
+                location={eventData.location}
+                date={eventData.date}
+                price={`IDR ${eventData.price?.toLocaleString('id-ID')}`}
+                isBookmarked={bookmarkedIds.has(eventData.id)}
+                onToggleBookmark={handleToggleBookmark}
+              />
+            ))}
           </View>
 
         </ScrollView>
       </View>
+
+      {/* Modal Dropdown Kategori */}
+      <Modal visible={showCategoryModal} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowCategoryModal(false)}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Pilih Kategori</Text>
+            {ALL_CATEGORIES.map(cat => (
+              <TouchableOpacity 
+                key={cat} 
+                style={[styles.modalItem, selectedCategory === cat && styles.modalItemActive]}
+                onPress={() => {
+                  setSelectedCategory(cat);
+                  setShowCategoryModal(false);
+                }}
+              >
+                <Text style={[styles.modalItemText, selectedCategory === cat && styles.modalItemTextActive]}>{cat}</Text>
+                {selectedCategory === cat && <MaterialCommunityIcons name="check" size={20} color="#1E88E5" />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Modal Dropdown Lokasi */}
+      <Modal visible={showLocationModal} transparent animationType="fade">
+        <Pressable style={styles.modalOverlay} onPress={() => setShowLocationModal(false)}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Pilih Lokasi</Text>
+            {uniqueLocations.map(loc => (
+              <TouchableOpacity 
+                key={loc} 
+                style={[styles.modalItem, selectedLocation === loc && styles.modalItemActive]}
+                onPress={() => {
+                  setSelectedLocation(loc);
+                  setShowLocationModal(false);
+                }}
+              >
+                <Text style={[styles.modalItemText, selectedLocation === loc && styles.modalItemTextActive]}>{loc}</Text>
+                {selectedLocation === loc && <MaterialCommunityIcons name="check" size={20} color="#1E88E5" />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -83,32 +247,33 @@ export default function ExploreScreen() {
 // --- KOMPONEN KECIL ---
 
 // Komponen Chip Riwayat Pencarian (ada tombol X)
-const SearchChip = ({ text }) => (
-  <TouchableOpacity style={styles.searchChip}>
-    <MaterialCommunityIcons name="magnify" size={16} color="#666" style={{ marginRight: 6 }} />
-    <Text style={styles.searchChipText}>{text}</Text>
-    <MaterialCommunityIcons name="close-circle" size={16} color="#A0A0A0" style={{ marginLeft: 6 }} />
-  </TouchableOpacity>
+const SearchChip = ({ text, onPress, onDelete }: { text: string, onPress: () => void, onDelete: () => void }) => (
+  <View style={styles.searchChip}>
+    <TouchableOpacity onPress={onPress} style={{flexDirection: 'row', alignItems: 'center'}}>
+      <MaterialCommunityIcons name="magnify" size={16} color="#666" style={{ marginRight: 6 }} />
+      <Text style={styles.searchChipText}>{text}</Text>
+    </TouchableOpacity>
+    <TouchableOpacity onPress={onDelete} style={{ marginLeft: 6, paddingHorizontal: 2 }}>
+      <MaterialCommunityIcons name="close-circle" size={18} color="#A0A0A0" />
+    </TouchableOpacity>
+  </View>
 );
 
 // Komponen Chip Dropdown Filter
-const FilterChip = ({ text }) => (
-  <TouchableOpacity style={styles.filterChip}>
-    <Text style={styles.filterChipText}>{text}</Text>
-    <MaterialCommunityIcons name="chevron-down" size={18} color="#666" style={{ marginLeft: 4 }} />
+const FilterChip = ({ text, active, onPress }: { text: string; active?: boolean; onPress: () => void }) => (
+  <TouchableOpacity style={[styles.filterChip, active && styles.filterChipActive]} onPress={onPress}>
+    <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>{text}</Text>
+    <MaterialCommunityIcons name="chevron-down" size={18} color={active ? '#1E88E5' : '#666'} style={{ marginLeft: 4 }} />
   </TouchableOpacity>
 );
 
 // Komponen Kartu Event Horizontal
-const EventListCard = ({ image, title, category, promotor, location, date, price }) => {
-  const [isLiked, setIsLiked] = useState(false);
-
+const EventListCard = ({ image, title, category, promotor, location, date, price, id, isBookmarked, onToggleBookmark }: { image: string, title: string, category: string, promotor: string, location: string, date: string, price: string, id: number, isBookmarked: boolean, onToggleBookmark: (id: number) => void }) => {
   return (
-    // onPress ditambahkan agar memunculkan pesan saat diklik
     <TouchableOpacity
       style={styles.card}
       activeOpacity={0.6}
-      onPress={() => router.push('/event-detail')}
+      onPress={() => router.push({ pathname: '/event-detail', params: { id } })}
     >
 
       {/* Gambar Kiri */}
@@ -116,12 +281,14 @@ const EventListCard = ({ image, title, category, promotor, location, date, price
         <Image source={{ uri: image }} style={styles.cardImage} />
         <TouchableOpacity
           style={styles.cardLikeButton}
-          onPress={() => setIsLiked(!isLiked)}
+          onPress={async () => {
+             onToggleBookmark(id);
+          }}
         >
           <MaterialCommunityIcons
-            name={isLiked ? "heart" : "heart-outline"}
+            name={isBookmarked ? "bookmark" : "bookmark-outline"}
             size={18}
-            color={isLiked ? "#E53935" : "#E53935"} 
+            color="#1E88E5" 
           />
         </TouchableOpacity>
       </View>
@@ -131,7 +298,7 @@ const EventListCard = ({ image, title, category, promotor, location, date, price
         <Text style={styles.cardTitle} numberOfLines={2}>{title}</Text>
 
         <View style={styles.categoryBadge}>
-          <MaterialCommunityIcons name="music-note" size={12} color="#666" />
+          <MaterialCommunityIcons name="tag" size={12} color="#1E88E5" />
           <Text style={styles.categoryBadgeText}>{category}</Text>
         </View>
 
@@ -140,7 +307,7 @@ const EventListCard = ({ image, title, category, promotor, location, date, price
           <Text style={styles.cardDetailText}>{promotor}</Text>
         </View>
         <View style={styles.cardDetailRow}>
-          <MaterialCommunityIcons name="calendar" size={14} color="#666" />
+          <MaterialCommunityIcons name="map-marker" size={14} color="#666" />
           <Text style={styles.cardDetailText}>{location}</Text>
         </View>
         <View style={styles.cardDetailRow}>
@@ -175,7 +342,18 @@ const styles = StyleSheet.create({
 
   filterIconBtn: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFFFFF', width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: '#E0E0E0' },
   filterChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 14, height: 36, borderRadius: 18, borderWidth: 1, borderColor: '#E0E0E0' },
+  filterChipActive: { backgroundColor: '#E3F2FD', borderColor: '#1E88E5' },
   filterChipText: { fontSize: 13, color: '#333' },
+  filterChipTextActive: { color: '#1E88E5', fontWeight: 'bold' },
+
+  // Modal dropdown
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#FFF', borderRadius: 15, padding: 20, width: '80%', maxHeight: '60%' },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 15 },
+  modalItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 10, borderRadius: 8, marginBottom: 4 },
+  modalItemActive: { backgroundColor: '#E3F2FD' },
+  modalItemText: { fontSize: 15, color: '#333' },
+  modalItemTextActive: { color: '#1E88E5', fontWeight: 'bold' },
 
   // List Container
   listContainer: { paddingHorizontal: 20, gap: 16 },
@@ -187,7 +365,7 @@ const styles = StyleSheet.create({
   cardLikeButton: { position: 'absolute', top: 6, left: 6, backgroundColor: '#FFFFFF', padding: 5, borderRadius: 15, elevation: 2 },
 
   cardContent: { flex: 1, marginLeft: 12, justifyContent: 'space-between' },
-  cardTitle: { fontSize: 14, fontWeight: 'bold', color: '#1E88E5', marginBottom: 4 }, // Biru sesuai desain
+  cardTitle: { fontSize: 14, fontWeight: 'bold', color: '#1E88E5', marginBottom: 4 },
 
   categoryBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E1F5FE', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginBottom: 6, gap: 4 },
   categoryBadgeText: { fontSize: 10, color: '#1E88E5', fontWeight: 'bold' },

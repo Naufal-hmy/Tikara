@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -19,18 +19,18 @@ export default function ProfileScreen() {
     const [email, setEmail] = useState<string>('');
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        loadUserData();
-    }, []);
+    useFocusEffect(
+        useCallback(() => {
+            loadUserData();
+        }, [])
+    );
 
     const loadUserData = async () => {
         try {
             setLoading(true);
-            // 1. Ambil Email dari Auth
             const { data: { user } } = await supabase.auth.getUser();
             if (user) setEmail(user.email || '');
 
-            // 2. Ambil Nama & Role dari tabel Profiles
             const userData = await authService.getCurrentProfile();
             setProfile(userData);
         } catch (error) {
@@ -70,11 +70,14 @@ export default function ProfileScreen() {
                     <View style={styles.avatarContainer}>
                         <MaterialCommunityIcons name="account" size={60} color="#1E88E5" />
                     </View>
-                    <Text style={styles.name}>{profile?.full_name || 'User Tikara'}</Text>
+                    <Text style={styles.name}>{profile?.full_name || 'User'}</Text>
                     <Text style={styles.email}>{email}</Text>
-                    {profile?.role === 'organizer' && (
+                    {/* Badge untuk Admin / Penyelenggara */}
+                    {(profile?.role === 'organizer' || profile?.role === 'admin') && (
                         <View style={styles.organizerBadge}>
-                            <Text style={styles.organizerBadgeText}>OFFICIAL ORGANIZER</Text>
+                            <Text style={styles.organizerBadgeText}>
+                                {profile?.role === 'admin' ? 'SUPER ADMIN' : 'OFFICIAL ORGANIZER'}
+                            </Text>
                         </View>
                     )}
                 </View>
@@ -82,25 +85,24 @@ export default function ProfileScreen() {
                 <View style={styles.menuContainer}>
                     <Text style={styles.menuTitle}>Akun Saya</Text>
 
-                    <ProfileMenu icon="ticket-confirmation-outline" title="Tiket Saya" onPress={() => router.push('/my-tickets')} />
-                    <ProfileMenu icon="heart-outline" title="Favorit" onPress={() => { }} />
+                    <ProfileMenu icon="account-edit-outline" title="Ubah Profil" onPress={() => router.push('/edit-profile')} />
+                    <ProfileMenu icon="ticket-confirmation-outline" title="Tiket Saya" onPress={() => router.push('/(tabs)/ticket')} />
+                    <ProfileMenu icon="history" title="Riwayat" onPress={() => router.push('/history')} />
+                    <ProfileMenu icon="bookmark-outline" title="Bookmark" onPress={() => router.push('/bookmarks')} />
 
-                    {/* PANEL PENYELENGGARA: Muncul hanya jika role-nya organizer */}
-                    {profile?.role === 'organizer' && (
+                    {/* PANEL PENYELENGGARA / ADMIN */}
+                    {(profile?.role === 'organizer' || profile?.role === 'admin') && (
                         <TouchableOpacity
                             style={[styles.menuItem, { backgroundColor: '#E1F5FE', borderColor: '#B3E5FC', borderWidth: 1 }]}
-                            onPress={() => router.push('/create-event')}
+                            onPress={() => router.push('/admin-dashboard')}
                         >
                             <View style={styles.menuLeft}>
-                                <MaterialCommunityIcons name="plus-circle" size={22} color="#1E88E5" />
-                                <Text style={[styles.menuLabel, { color: '#1E88E5', fontWeight: 'bold' }]}>Panel Penyelenggara</Text>
+                                <MaterialCommunityIcons name="view-dashboard-outline" size={22} color="#1E88E5" />
+                                <Text style={[styles.menuLabel, { color: '#1E88E5', fontWeight: 'bold' }]}>Dashboard Admin</Text>
                             </View>
                             <MaterialCommunityIcons name="chevron-right" size={20} color="#1E88E5" />
                         </TouchableOpacity>
                     )}
-
-                    <ProfileMenu icon="shield-check-outline" title="Keamanan Akun" onPress={() => { }} />
-                    <ProfileMenu icon="help-circle-outline" title="Pusat Bantuan" onPress={() => { }} />
 
                     <View style={styles.divider} />
 

@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React, { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
     Dimensions,
     Image,
@@ -11,11 +11,26 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { eventService } from '../services/eventService';
 
 const { width } = Dimensions.get('window');
 
 export default function EventDetailScreen() {
-    const [isLiked, setIsLiked] = useState(false);
+    const { id } = useLocalSearchParams();
+    const [event, setEvent] = useState<any>(null);
+    const [isBookmarked, setIsBookmarked] = useState(false);
+
+    useEffect(() => {
+        if (id) {
+            eventService.getEventById(id as string).then(setEvent);
+            // Cek bookmark status
+            eventService.getBookmarkedEventIds().then(ids => {
+                setIsBookmarked(ids.has(Number(id)));
+            });
+        }
+    }, [id]);
+
+    if (!event) return <View style={styles.container}><Text style={{marginTop: 50, textAlign: 'center'}}>Loading...</Text></View>;
 
     return (
         <View style={styles.container}>
@@ -24,7 +39,7 @@ export default function EventDetailScreen() {
                 {/* Image Header Section */}
                 <View style={styles.imageContainer}>
                     <Image
-                        source={{ uri: 'https://picsum.photos/600/400?random=50' }}
+                        source={{ uri: event.image_url || 'https://picsum.photos/600/400?random=50' }}
                         style={styles.headerImage}
                     />
 
@@ -33,11 +48,14 @@ export default function EventDetailScreen() {
                         <TouchableOpacity style={styles.circleBtn} onPress={() => router.back()}>
                             <MaterialCommunityIcons name="chevron-left" size={28} color="#1E88E5" />
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.circleBtn} onPress={() => setIsLiked(!isLiked)}>
+                        <TouchableOpacity style={styles.circleBtn} onPress={async () => {
+                            const result = await eventService.toggleBookmark(Number(id));
+                            setIsBookmarked(result);
+                        }}>
                             <MaterialCommunityIcons
-                                name={isLiked ? "heart" : "heart-outline"}
+                                name={isBookmarked ? "bookmark" : "bookmark-outline"}
                                 size={24}
-                                color="#E53935"
+                                color="#1E88E5"
                             />
                         </TouchableOpacity>
                     </SafeAreaView>
@@ -45,26 +63,26 @@ export default function EventDetailScreen() {
 
                 {/* Content Section */}
                 <View style={styles.contentWrapper}>
-                    <Text style={styles.eventTitle}>Cakra Khan: Symphony of giving</Text>
-                    <Text style={styles.createdBy}>Dibuat oleh, <Text style={{ color: '#1E88E5' }}>DinaEO</Text></Text>
+                    <Text style={styles.eventTitle}>{event.title}</Text>
+                    <Text style={styles.createdBy}>Dibuat oleh, <Text style={{ color: '#1E88E5' }}>Tikara Partner</Text></Text>
 
                     {/* Info Rows */}
                     <View style={styles.infoSection}>
                         <View style={styles.infoRow}>
                             <MaterialCommunityIcons name="map-marker" size={20} color="#E53935" />
                             <Text style={styles.infoText}>
-                                Harris Hotel & Conventions Festival Citylink Bandung, Jalan Peta, Suka Asih, Bandung City, West Java, Indonesia, Bandung
+                                {event.location}
                             </Text>
                         </View>
 
                         <View style={styles.infoRow}>
                             <MaterialCommunityIcons name="calendar-month" size={20} color="#E53935" />
-                            <Text style={styles.infoText}>31 Desember 2025</Text>
+                            <Text style={styles.infoText}>{event.date}</Text>
                         </View>
 
                         <View style={styles.infoRow}>
                             <MaterialCommunityIcons name="ticket-confirmation" size={20} color="#E53935" />
-                            <Text style={styles.infoText}>Harga tiket mulai dari IDR 185.000</Text>
+                            <Text style={styles.infoText}>Harga tiket mulai dari IDR {event.price?.toLocaleString('id-ID')}</Text>
                         </View>
                     </View>
 
@@ -73,7 +91,7 @@ export default function EventDetailScreen() {
                     {/* Main Action Button */}
                     <TouchableOpacity
                         style={styles.buyBtn}
-                        onPress={() => router.push('/buy-ticket')}
+                        onPress={() => router.push({ pathname: '/buy-ticket', params: { id: event.id, price: event.price } })}
                     >
                         <Text style={styles.buyBtnText}>Beli Tiket Sekarang</Text>
                     </TouchableOpacity>
@@ -87,12 +105,15 @@ export default function EventDetailScreen() {
                             <Text style={styles.columnLabel}>Harga</Text>
                         </View>
 
-                        <PriceRow label="Diamond" />
-                        <PriceRow label="Platinum" />
-                        <PriceRow label="Gold" />
-                        <PriceRow label="Silver" />
-                        <PriceRow label="Kategori" />
-                        <PriceRow label="Kategori" isLast={true} />
+                        {event.price ? (
+                            <>
+                                <PriceRow label="Silver" price={`IDR ${event.price.toLocaleString('id-ID')}`} />
+                                <PriceRow label="Gold" price={`IDR ${(event.price + 50000).toLocaleString('id-ID')}`} />
+                                <PriceRow label="Platinum" price={`IDR ${(event.price + 150000).toLocaleString('id-ID')}`} isLast={true} />
+                            </>
+                        ) : (
+                            <Text style={{textAlign: 'center', padding: 15, color: '#666'}}>Kategori tidak tersedia saat ini.</Text>
+                        )}
                     </View>
                 </View>
             </ScrollView>
@@ -101,10 +122,10 @@ export default function EventDetailScreen() {
 }
 
 // --- Komponen Baris Harga ---
-const PriceRow = ({ label, isLast }) => (
+const PriceRow = ({ label, price, isLast }: { label: string, price: string, isLast?: boolean }) => (
     <View style={[styles.priceRow, isLast && { borderBottomWidth: 0 }]}>
         <Text style={styles.priceLabel}>{label}</Text>
-        <Text style={styles.priceValue}>Harga</Text>
+        <Text style={styles.priceValue}>{price}</Text>
     </View>
 );
 

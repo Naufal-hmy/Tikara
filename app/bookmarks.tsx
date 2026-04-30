@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useState, useCallback } from 'react';
 import {
     Image,
     ScrollView,
@@ -10,8 +10,28 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { eventService } from '../services/eventService';
 
 export default function BookmarksScreen() {
+    const [bookmarks, setBookmarks] = useState<any[]>([]);
+
+    // Refresh setiap kali halaman difokuskan
+    useFocusEffect(
+        useCallback(() => {
+            loadBookmarks();
+        }, [])
+    );
+
+    const loadBookmarks = async () => {
+        const data = await eventService.getMyBookmarks();
+        setBookmarks(data);
+    };
+
+    const handleRemove = async (eventId: number) => {
+        await eventService.toggleBookmark(eventId);
+        loadBookmarks(); // Refresh
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
@@ -19,65 +39,53 @@ export default function BookmarksScreen() {
                 <TouchableOpacity onPress={() => router.back()}>
                     <MaterialCommunityIcons name="arrow-left" size={24} color="#000" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Favorit Saya</Text>
+                <Text style={styles.headerTitle}>Bookmark Saya</Text>
                 <View style={{ width: 24 }} />
             </View>
 
+            {/* List Bookmark */}
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-                {/* Item Favorit 1 */}
-                <BookmarkItem
-                    title="Cakra Khan: Symphony of giving"
-                    date="31 Des 2025"
-                    location="Bandung Convention Center"
-                    image="https://picsum.photos/200/200?random=1"
-                />
-
-                {/* Item Favorit 2 */}
-                <BookmarkItem
-                    title="Tulus: Tur Manusia"
-                    date="10 Feb 2026"
-                    location="Istora Senayan, Jakarta"
-                    image="https://picsum.photos/200/200?random=2"
-                />
-
-                {/* Item Favorit 3 */}
-                <BookmarkItem
-                    title="Coldplay: Music of the Spheres"
-                    date="15 Mei 2026"
-                    location="Stadion Utama GBK"
-                    image="https://picsum.photos/200/200?random=3"
-                />
+                {bookmarks.length === 0 && <Text style={{textAlign: 'center', marginTop: 30}}>Belum ada acara yang ditandai.</Text>}
+                
+                {bookmarks.map((bm: any) => (
+                    <BookmarkItem
+                        key={bm.id}
+                        id={bm.events?.id}
+                        image={bm.events?.image_url}
+                        title={bm.events?.title}
+                        date={bm.events?.date}
+                        price={`IDR ${bm.events?.price?.toLocaleString('id-ID')}`}
+                        onRemove={() => handleRemove(bm.events?.id)}
+                    />
+                ))}
 
             </ScrollView>
         </SafeAreaView>
     );
 }
-
-// --- KOMPONEN ITEM FAVORIT ---
-const BookmarkItem = ({ title, date, location, image }) => (
-    <TouchableOpacity
-        style={styles.card}
-        activeOpacity={0.8}
-        onPress={() => router.push('/details')}
-    >
-        <Image source={{ uri: image }} style={styles.image} />
-        <View style={styles.info}>
-            <Text style={styles.title} numberOfLines={1}>{title}</Text>
-            <View style={styles.row}>
-                <MaterialCommunityIcons name="calendar" size={14} color="#666" />
-                <Text style={styles.detailText}>{date}</Text>
+// --- KOMPONEN ITEM BOOKMARK ---
+const BookmarkItem = ({ id, image, title, date, price, onRemove }: { id: number, image: string, title: string, date: string, price: string, onRemove: () => void }) => {
+    return (
+        <TouchableOpacity style={styles.card} activeOpacity={0.8} onPress={() => router.push({ pathname: '/event-detail', params: { id } })}>
+            <Image source={{ uri: image }} style={styles.image} />
+            <View style={styles.info}>
+                <Text style={styles.title} numberOfLines={1}>{title}</Text>
+                <View style={styles.row}>
+                    <MaterialCommunityIcons name="calendar" size={14} color="#666" />
+                    <Text style={styles.detailText}>{date}</Text>
+                </View>
+                <View style={styles.row}>
+                    <MaterialCommunityIcons name="ticket" size={14} color="#666" />
+                    <Text style={styles.detailText} numberOfLines={1}>{price}</Text>
+                </View>
             </View>
-            <View style={styles.row}>
-                <MaterialCommunityIcons name="map-marker" size={14} color="#666" />
-                <Text style={styles.detailText} numberOfLines={1}>{location}</Text>
-            </View>
-        </View>
-        <TouchableOpacity style={styles.removeBtn}>
-            <MaterialCommunityIcons name="heart" size={22} color="#E53935" />
+            <TouchableOpacity style={styles.removeBtn} onPress={onRemove}>
+                <MaterialCommunityIcons name="bookmark-remove" size={22} color="#1E88E5" />
+            </TouchableOpacity>
         </TouchableOpacity>
-    </TouchableOpacity>
-);
+    );
+};
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#FFFFFF' },

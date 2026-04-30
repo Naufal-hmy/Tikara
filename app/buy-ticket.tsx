@@ -1,17 +1,37 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function BuyTicketScreen() {
+    const { id, price: p } = useLocalSearchParams();
     // State untuk jumlah tiket
     const [silverCount, setSilverCount] = useState(0);
     const [goldCount, setGoldCount] = useState(0);
 
-    const pricePerTicket = 960000;
+    const pricePerTicket = Number(p) || 960000;
+    const silverPrice = pricePerTicket;
+    const goldPrice = pricePerTicket + 50000;
+
     const totalTickets = silverCount + goldCount;
-    const totalPrice = totalTickets * pricePerTicket;
+    const totalPrice = (silverCount * silverPrice) + (goldCount * goldPrice);
+
+    const handleCheckout = () => {
+        if (totalTickets === 0) return;
+        router.push({
+            pathname: '/checkout',
+            params: {
+                id,
+                silverQty: silverCount,
+                goldQty: goldCount,
+                silverPrice: silverPrice,
+                goldPrice: goldPrice,
+                totalPrice: totalPrice,
+                totalTickets: totalTickets
+            }
+        });
+    };
 
     return (
         <SafeAreaView style={styles.container}>
@@ -28,7 +48,8 @@ export default function BuyTicketScreen() {
                 {/* Tiket Silver */}
                 <TicketCategoryCard
                     title="Silver"
-                    price="Rp.960.000 + pajak 10% dan layanan 5%"
+                    priceDesc={`Rp.${silverPrice.toLocaleString('id-ID')} + pajak 10% dan layanan 5%`}
+                    price={silverPrice}
                     count={silverCount}
                     onAdd={() => setSilverCount(silverCount + 1)}
                     onRemove={() => silverCount > 0 && setSilverCount(silverCount - 1)}
@@ -37,7 +58,8 @@ export default function BuyTicketScreen() {
                 {/* Tiket Gold */}
                 <TicketCategoryCard
                     title="Gold"
-                    price="Rp.960.000 + pajak 10% dan layanan 5%"
+                    priceDesc={`Rp.${goldPrice.toLocaleString('id-ID')} + pajak 10% dan layanan 5%`}
+                    price={goldPrice}
                     count={goldCount}
                     onAdd={() => setGoldCount(goldCount + 1)}
                     onRemove={() => goldCount > 0 && setGoldCount(goldCount - 1)}
@@ -54,7 +76,7 @@ export default function BuyTicketScreen() {
                     </View>
                     <TouchableOpacity
                         style={styles.checkoutBtn}
-                        onPress={() => router.push('/checkout')} // Step selanjutnya ke checkout
+                        onPress={handleCheckout} // Panggil Handle Checkout
                     >
                         <Text style={styles.checkoutBtnText}>Lihat Pesanan</Text>
                     </TouchableOpacity>
@@ -65,10 +87,10 @@ export default function BuyTicketScreen() {
 }
 
 // --- KOMPONEN KARTU KATEGORI TIKET ---
-const TicketCategoryCard = ({ title, price, count, onAdd, onRemove }) => (
+const TicketCategoryCard = ({ title, priceDesc, price, count, onAdd, onRemove }: { title: string, priceDesc: string, price: number, count: number, onAdd: () => void, onRemove: () => void }) => (
     <View style={styles.card}>
         <Text style={styles.cardTitle}>{title}</Text>
-        <Text style={styles.cardPriceDesc}>{price}</Text>
+        <Text style={styles.cardPriceDesc}>{priceDesc}</Text>
 
         <View style={styles.benefitRow}>
             <MaterialCommunityIcons name="history" size={18} color="#666" />
@@ -86,7 +108,7 @@ const TicketCategoryCard = ({ title, price, count, onAdd, onRemove }) => (
         <TouchableOpacity><Text style={styles.detailLink}>Detail</Text></TouchableOpacity>
 
         <View style={styles.cardFooter}>
-            <Text style={styles.priceTag}>IDR 960.000</Text>
+            <Text style={styles.priceTag}>IDR {price.toLocaleString('id-ID')}</Text>
 
             {count === 0 ? (
                 <TouchableOpacity style={styles.addBtn} onPress={onAdd}>

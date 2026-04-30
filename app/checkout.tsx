@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useState, useEffect, useRef } from 'react';
-import { ActivityIndicator, Alert, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import QRCode from 'react-native-qrcode-svg';
 import { supabase } from '../lib/supabase';
@@ -21,6 +21,11 @@ export default function CheckoutScreen() {
     const [loadingError, setLoadingError] = useState('');
     const [timer, setTimer] = useState(299); // 4:59 in seconds
 
+    // Payment gateway simulation states
+    const [showEwalletModal, setShowEwalletModal] = useState(false);
+    const [ewalletStep, setEwalletStep] = useState<'connecting' | 'confirm' | 'processing' | 'success'>('connecting');
+    const successScale = useRef(new Animated.Value(0)).current;
+
     const eventId = params.id;
     const sQty = Number(params.silverQty) || 0;
     const gQty = Number(params.goldQty) || 0;
@@ -29,8 +34,7 @@ export default function CheckoutScreen() {
     const finalPrice = Number(params.totalPrice) || 0;
     const finalTickets = Number(params.totalTickets) || 0;
 
-    // Debug: log params yang diterima
-    console.log('Checkout params:', { eventId, sQty, gQty, silverPriceVal, goldPriceVal, finalPrice, finalTickets });
+
 
     const pajak = finalPrice * 0.10;
     const biayaLayanan = finalPrice * 0.05;
@@ -126,6 +130,134 @@ export default function CheckoutScreen() {
             setIsProcessing(false);
         }
     };
+
+    // E-wallet simulation handler
+    const ewalletLabels: Record<string, string> = { ovo: 'OVO', gopay: 'GoPay', shopeepay: 'ShopeePay' };
+
+    const openEwalletSimulation = (method: string) => {
+        setSelectedMethod(method);
+        setEwalletStep('connecting');
+        setShowEwalletModal(true);
+        successScale.setValue(0);
+        // Simulate connecting delay
+        setTimeout(() => setEwalletStep('confirm'), 2000);
+    };
+
+    const handleEwalletPay = async () => {
+        setEwalletStep('processing');
+        await new Promise(res => setTimeout(res, 2500));
+        try {
+            const result = await orderService.purchaseTicket(Number(eventId), finalTickets, grandTotal);
+            if (result.success) {
+                setEwalletStep('success');
+                Animated.spring(successScale, { toValue: 1, friction: 4, tension: 40, useNativeDriver: true }).start();
+            } else {
+                Alert.alert("Gagal", result.message);
+                setShowEwalletModal(false);
+            }
+        } catch (error: any) {
+            Alert.alert("Gagal", error.message || "Terjadi kesalahan.");
+            setShowEwalletModal(false);
+        }
+    };
+
+    // E-wallet modal renderer
+    const renderEwalletModal = () => (
+        <Modal visible={showEwalletModal} animationType="slide" onRequestClose={() => {
+            if (ewalletStep !== 'processing') { setShowEwalletModal(false); }
+        }}>
+            <SafeAreaView style={styles.container}>
+                {ewalletStep === 'connecting' && (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+                        <ActivityIndicator size="large" color="#1E88E5" />
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginTop: 20 }}>
+                            Menghubungkan ke {ewalletLabels[selectedMethod] || selectedMethod}...
+                        </Text>
+                        <Text style={{ fontSize: 13, color: '#999', marginTop: 8 }}>Mohon tunggu sebentar</Text>
+                    </View>
+                )}
+
+                {ewalletStep === 'confirm' && (
+                    <>
+                        <View style={styles.header}>
+                            <TouchableOpacity onPress={() => setShowEwalletModal(false)}>
+                                <MaterialCommunityIcons name="chevron-left" size={28} color="#000" />
+                            </TouchableOpacity>
+                            <Text style={styles.headerTitle}>{ewalletLabels[selectedMethod] || 'E-Wallet'}</Text>
+                            <View style={{ width: 28 }} />
+                        </View>
+                        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 140 }}>
+                            <View style={{ alignItems: 'center', padding: 20, backgroundColor: '#E3F2FD', borderRadius: 12, marginBottom: 20 }}>
+                                <Text style={{ fontSize: 13, color: '#666' }}>Total Pembayaran</Text>
+                                <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#1E88E5', marginTop: 5 }}>
+                                    IDR {grandTotal.toLocaleString('id-ID')}
+                                </Text>
+                            </View>
+                            <View style={{ backgroundColor: '#FFF', borderRadius: 15, padding: 20, elevation: 2, borderWidth: 1, borderColor: '#F0F0F0' }}>
+                                <Text style={{ fontWeight: 'bold', color: '#333', fontSize: 15, marginBottom: 15 }}>Detail Pembayaran</Text>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                                    <Text style={{ color: '#999', fontSize: 13 }}>Event</Text>
+                                    <Text style={{ color: '#333', fontSize: 13, fontWeight: '500' }}>{event?.title}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                                    <Text style={{ color: '#999', fontSize: 13 }}>Jumlah Tiket</Text>
+                                    <Text style={{ color: '#333', fontSize: 13, fontWeight: '500' }}>{finalTickets} tiket</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                                    <Text style={{ color: '#999', fontSize: 13 }}>Subtotal</Text>
+                                    <Text style={{ color: '#333', fontSize: 13, fontWeight: '500' }}>IDR {finalPrice.toLocaleString('id-ID')}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                                    <Text style={{ color: '#999', fontSize: 13 }}>Pajak (10%)</Text>
+                                    <Text style={{ color: '#333', fontSize: 13, fontWeight: '500' }}>IDR {pajak.toLocaleString('id-ID')}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
+                                    <Text style={{ color: '#999', fontSize: 13 }}>Biaya Layanan (5%)</Text>
+                                    <Text style={{ color: '#333', fontSize: 13, fontWeight: '500' }}>IDR {biayaLayanan.toLocaleString('id-ID')}</Text>
+                                </View>
+                                <View style={{ height: 1, backgroundColor: '#F0F0F0', marginVertical: 10 }} />
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                    <Text style={{ color: '#333', fontSize: 14, fontWeight: 'bold' }}>Total</Text>
+                                    <Text style={{ color: '#1E88E5', fontSize: 14, fontWeight: 'bold' }}>IDR {grandTotal.toLocaleString('id-ID')}</Text>
+                                </View>
+                            </View>
+                        </ScrollView>
+                        <View style={styles.footer}>
+                            <TouchableOpacity style={styles.mainBtn} onPress={handleEwalletPay}>
+                                <Text style={styles.mainBtnText}>Bayar dengan {ewalletLabels[selectedMethod]}</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </>
+                )}
+
+                {ewalletStep === 'processing' && (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+                        <ActivityIndicator size="large" color="#1E88E5" />
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginTop: 20 }}>Memproses Pembayaran...</Text>
+                        <Text style={{ fontSize: 13, color: '#999', marginTop: 8, textAlign: 'center' }}>Sedang memverifikasi pembayaran via {ewalletLabels[selectedMethod]}</Text>
+                    </View>
+                )}
+
+                {ewalletStep === 'success' && (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+                        <Animated.View style={{
+                            transform: [{ scale: successScale }],
+                            backgroundColor: '#E8F5E9', width: 100, height: 100, borderRadius: 50,
+                            justifyContent: 'center', alignItems: 'center', marginBottom: 25,
+                        }}>
+                            <MaterialCommunityIcons name="check-circle" size={60} color="#4CAF50" />
+                        </Animated.View>
+                        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#333' }}>Pembayaran Berhasil! 🎉</Text>
+                        <Text style={{ fontSize: 14, color: '#666', marginTop: 10, textAlign: 'center' }}>Tiket Anda sudah aktif dan dapat dilihat di halaman Tiket</Text>
+                        <TouchableOpacity style={[styles.mainBtn, { marginTop: 30, paddingHorizontal: 40 }]}
+                            onPress={() => { setShowEwalletModal(false); router.replace('/(tabs)/ticket'); }}>
+                            <Text style={styles.mainBtnText}>Lihat Tiket</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+            </SafeAreaView>
+        </Modal>
+    );
 
     // LOADING STATE
     if (!event || !profile) {
@@ -244,6 +376,7 @@ export default function CheckoutScreen() {
     if (step === 2) {
         return (
             <SafeAreaView style={styles.container}>
+                {renderEwalletModal()}
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => setStep(1)}>
                         <MaterialCommunityIcons name="chevron-left" size={28} color="#000" />
@@ -314,6 +447,7 @@ export default function CheckoutScreen() {
     if (step === 3) {
         return (
             <SafeAreaView style={styles.container}>
+                {renderEwalletModal()}
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => setStep(2)}>
                         <MaterialCommunityIcons name="chevron-left" size={28} color="#000" />
@@ -383,8 +517,8 @@ export default function CheckoutScreen() {
                             } else if (selectedMethod === 'saldo') {
                                 handleConfirmPayment();
                             } else {
-                                // Simulasi e-wallet → langsung proses
-                                handleConfirmPayment();
+                                // Buka simulasi payment gateway e-wallet
+                                openEwalletSimulation(selectedMethod);
                             }
                         }}
                     >
@@ -396,6 +530,53 @@ export default function CheckoutScreen() {
     }
 
     // ============ STEP 4: Payment - QRIS ============
+    const handleQrisVerify = async () => {
+        if (isProcessing) return;
+        setIsProcessing(true);
+        // Simulate verification delay
+        await new Promise(res => setTimeout(res, 2500));
+        try {
+            const result = await orderService.purchaseTicket(Number(eventId), finalTickets, grandTotal);
+            if (result.success) {
+                setIsProcessing(false);
+                setStep(5); // go to success step
+                successScale.setValue(0);
+                Animated.spring(successScale, { toValue: 1, friction: 4, tension: 40, useNativeDriver: true }).start();
+            } else {
+                Alert.alert("Gagal", result.message);
+                setIsProcessing(false);
+            }
+        } catch (error: any) {
+            Alert.alert("Gagal", error.message || "Terjadi kesalahan.");
+            setIsProcessing(false);
+        }
+    };
+
+    // STEP 5: Success screen (shared for QRIS)
+    if (step === 5) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+                    <Animated.View style={{
+                        transform: [{ scale: successScale }],
+                        backgroundColor: '#E8F5E9', width: 100, height: 100, borderRadius: 50,
+                        justifyContent: 'center', alignItems: 'center', marginBottom: 25,
+                    }}>
+                        <MaterialCommunityIcons name="check-circle" size={60} color="#4CAF50" />
+                    </Animated.View>
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#333' }}>Pembayaran Berhasil! 🎉</Text>
+                    <Text style={{ fontSize: 14, color: '#666', marginTop: 10, textAlign: 'center' }}>
+                        Tiket Anda sudah aktif dan dapat dilihat di halaman Tiket
+                    </Text>
+                    <TouchableOpacity style={[styles.mainBtn, { marginTop: 30, paddingHorizontal: 40 }]}
+                        onPress={() => router.replace('/(tabs)/ticket')}>
+                        <Text style={styles.mainBtnText}>Lihat Tiket</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
+
     return (
         <SafeAreaView style={styles.container}>
             <View style={styles.header}>
@@ -409,6 +590,12 @@ export default function CheckoutScreen() {
                 <View style={{ width: 28 }} />
             </View>
             <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 140, alignItems: 'center' }}>
+                {/* Timer */}
+                <View style={{ marginBottom: 15, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 12, color: '#999' }}>Selesaikan pembayaran dalam</Text>
+                    <Text style={styles.timerText}>{formatTimer(timer)}</Text>
+                </View>
+
                 {/* QR Code besar */}
                 <View style={styles.qrisBox}>
                     <QRCode value={`QRIS-TIKARA-${orderId}-${grandTotal}`} size={220} />
@@ -454,9 +641,9 @@ export default function CheckoutScreen() {
                 <TouchableOpacity
                     style={[styles.mainBtn, { marginTop: 10 }, isProcessing && { backgroundColor: '#CCC' }]}
                     disabled={isProcessing}
-                    onPress={handleConfirmPayment}
+                    onPress={handleQrisVerify}
                 >
-                    <Text style={styles.mainBtnText}>{isProcessing ? 'Memproses...' : 'Cek status pembayaran'}</Text>
+                    <Text style={styles.mainBtnText}>{isProcessing ? 'Memverifikasi...' : 'Cek Status Pembayaran'}</Text>
                 </TouchableOpacity>
             </View>
         </SafeAreaView>

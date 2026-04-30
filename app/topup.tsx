@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
 
@@ -80,15 +80,63 @@ const INSTRUCTIONS: Record<string, { title: string; steps: string[] }> = {
     },
 };
 
+// Generate nomor virtual account
+const generateVA = (method: string) => {
+    const prefixes: Record<string, string> = {
+        bni: '8808', bri: '7702', bca: '3901',
+        indomaret: 'IDM-', alfamart: 'ALF-',
+    };
+    const prefix = prefixes[method] || '0000';
+    const rand = Math.floor(1000000000 + Math.random() * 9000000000).toString();
+    return prefix + rand;
+};
+
 export default function TopUpScreen() {
     const [selectedMethod, setSelectedMethod] = useState('');
     const [selectedAmount, setSelectedAmount] = useState(0);
     const [currentBalance, setCurrentBalance] = useState(0);
     const [isProcessing, setIsProcessing] = useState(false);
 
+    // Payment gateway simulation states
+    const [showPaymentGateway, setShowPaymentGateway] = useState(false);
+    const [paymentStep, setPaymentStep] = useState<'waiting' | 'processing' | 'success'>('waiting');
+    const [vaNumber] = useState(() => generateVA(''));
+    const [gatewayVA, setGatewayVA] = useState('');
+    const [gatewayTimer, setGatewayTimer] = useState(299);
+    const timerRef = useRef<any>(null);
+
+    // Animation
+    const successAnim = useRef(new Animated.Value(0)).current;
+
     useEffect(() => {
         loadBalance();
     }, []);
+
+    // Timer for payment gateway
+    useEffect(() => {
+        if (showPaymentGateway && paymentStep === 'waiting') {
+            setGatewayTimer(299);
+            timerRef.current = setInterval(() => {
+                setGatewayTimer(prev => {
+                    if (prev <= 0) {
+                        clearInterval(timerRef.current);
+                        Alert.alert("Waktu Habis", "Waktu pembayaran sudah habis.", [
+                            { text: "OK", onPress: () => { setShowPaymentGateway(false); setPaymentStep('waiting'); } }
+                        ]);
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        }
+        return () => clearInterval(timerRef.current);
+    }, [showPaymentGateway, paymentStep]);
+
+    const formatTimer = (s: number) => {
+        const min = Math.floor(s / 60);
+        const sec = s % 60;
+        return `${min < 10 ? '0' : ''}${min}:${sec < 10 ? '0' : ''}${sec}`;
+    };
 
     const loadBalance = async () => {
         const { data: { user } } = await supabase.auth.getUser();
@@ -97,14 +145,26 @@ export default function TopUpScreen() {
         if (profile) setCurrentBalance(profile.balance || 0);
     };
 
-    // Simulasi top up — langsung tambah saldo di Supabase
-    const handleSimulateTopUp = async () => {
-        if (isProcessing) return;
+    // Open payment gateway
+    const openPaymentGateway = () => {
         if (selectedAmount === 0) {
             Alert.alert("Pilih Nominal", "Silahkan pilih nominal top up terlebih dahulu");
             return;
         }
+        setGatewayVA(generateVA(selectedMethod));
+        setPaymentStep('waiting');
+        setShowPaymentGateway(true);
+    };
+
+    // Simulasi proses pembayaran
+    const handleSimulatePayment = async () => {
+        if (isProcessing) return;
         setIsProcessing(true);
+        setPaymentStep('processing');
+        clearInterval(timerRef.current);
+
+        // Simulasi delay 2 detik seolah memproses
+        await new Promise(res => setTimeout(res, 2000));
 
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -127,26 +187,169 @@ export default function TopUpScreen() {
 
             if (updateErr) {
                 Alert.alert("Gagal TopUp", updateErr.message);
+                setPaymentStep('waiting');
             } else {
                 setCurrentBalance(newBalance);
-                Alert.alert(
-                    "Top Up Berhasil! 🎉",
-                    `Saldo bertambah Rp ${selectedAmount.toLocaleString('id-ID')}\nSaldo sekarang: Rp ${newBalance.toLocaleString('id-ID')}`,
-                    [{ text: "Mantap", onPress: () => router.back() }]
-                );
+                setPaymentStep('success');
+                // Animate success
+                Animated.spring(successAnim, {
+                    toValue: 1, friction: 4, tension: 40, useNativeDriver: true,
+                }).start();
             }
         } catch (err: any) {
             Alert.alert("Error", err.message);
+            setPaymentStep('waiting');
         } finally {
             setIsProcessing(false);
         }
     };
+
+    const getMethodLabel = (id: string) => {
+        const labels: Record<string, string> = {
+            indomaret: 'Indomaret', alfamart: 'Alfamart',
+            bni: 'Bank BNI', bri: 'Bank BRI', bca: 'Bank BCA',
+        };
+        return labels[id] || id;
+    };
+
+    const isBank = ['bni', 'bri', 'bca'].includes(selectedMethod);
+
+    // ========== PAYMENT GATEWAY MODAL ==========
+    const renderPaymentGateway = () => (
+        <Modal visible={showPaymentGateway} animationType="slide" onRequestClose={() => {
+            if (paymentStep !== 'processing') {
+                clearInterval(timerRef.current);
+                setShowPaymentGateway(false);
+                setPaymentStep('waiting');
+            }
+        }}>
+            <SafeAreaView style={styles.container}>
+                {/* Header */}
+                <View style={styles.header}>
+                    {paymentStep !== 'success' && (
+                        <TouchableOpacity onPress={() => {
+                            clearInterval(timerRef.current);
+                            setShowPaymentGateway(false);
+                            setPaymentStep('waiting');
+                        }}>
+                            <MaterialCommunityIcons name="chevron-left" size={28} color="#000" />
+                        </TouchableOpacity>
+                    )}
+                    {paymentStep !== 'success' && <Text style={styles.headerTitle}>Payment Gateway</Text>}
+                    <View style={{ width: 28 }} />
+                </View>
+
+                {paymentStep === 'waiting' && (
+                    <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 140 }}>
+                        {/* Timer */}
+                        <View style={styles.gwTimerBox}>
+                            <Text style={{ fontSize: 12, color: '#999' }}>Selesaikan pembayaran dalam</Text>
+                            <Text style={styles.gwTimerText}>{formatTimer(gatewayTimer)}</Text>
+                        </View>
+
+                        {/* Amount */}
+                        <View style={styles.gwAmountBox}>
+                            <Text style={{ fontSize: 13, color: '#666' }}>Total Pembayaran</Text>
+                            <Text style={styles.gwAmountText}>Rp {selectedAmount.toLocaleString('id-ID')}</Text>
+                        </View>
+
+                        {/* Payment Info */}
+                        <View style={styles.gwInfoCard}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15 }}>
+                                <MaterialCommunityIcons name={isBank ? 'bank' : 'store'} size={24} color="#1E88E5" />
+                                <Text style={{ fontSize: 15, fontWeight: 'bold', color: '#333', marginLeft: 10 }}>
+                                    {getMethodLabel(selectedMethod)}
+                                </Text>
+                            </View>
+
+                            <Text style={{ fontSize: 12, color: '#999', marginBottom: 6 }}>
+                                {isBank ? 'Nomor Virtual Account' : 'Kode Pembayaran'}
+                            </Text>
+                            <View style={styles.gwVARow}>
+                                <Text style={styles.gwVAText}>{gatewayVA}</Text>
+                                <TouchableOpacity style={styles.gwCopyBtn}>
+                                    <MaterialCommunityIcons name="content-copy" size={18} color="#1E88E5" />
+                                    <Text style={{ color: '#1E88E5', fontSize: 12, fontWeight: 'bold', marginLeft: 4 }}>Salin</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={styles.gwDivider} />
+
+                            <View style={styles.gwDetailRow}>
+                                <Text style={styles.gwDetailLabel}>Metode</Text>
+                                <Text style={styles.gwDetailValue}>{getMethodLabel(selectedMethod)}</Text>
+                            </View>
+                            <View style={styles.gwDetailRow}>
+                                <Text style={styles.gwDetailLabel}>Nominal Top Up</Text>
+                                <Text style={styles.gwDetailValue}>Rp {selectedAmount.toLocaleString('id-ID')}</Text>
+                            </View>
+                            <View style={styles.gwDetailRow}>
+                                <Text style={styles.gwDetailLabel}>Biaya Admin</Text>
+                                <Text style={styles.gwDetailValue}>Rp 0</Text>
+                            </View>
+                        </View>
+
+                        {/* Petunjuk */}
+                        <View style={styles.gwHintBox}>
+                            <MaterialCommunityIcons name="information-outline" size={18} color="#1E88E5" />
+                            <Text style={{ flex: 1, fontSize: 12, color: '#666', marginLeft: 8, lineHeight: 18 }}>
+                                {isBank
+                                    ? 'Transfer ke nomor Virtual Account di atas melalui ATM, Mobile Banking, atau Internet Banking.'
+                                    : 'Tunjukkan kode pembayaran ke kasir dan bayar sesuai nominal.'}
+                            </Text>
+                        </View>
+                    </ScrollView>
+                )}
+
+                {paymentStep === 'processing' && (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+                        <ActivityIndicator size="large" color="#1E88E5" />
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#333', marginTop: 20 }}>Memproses Pembayaran...</Text>
+                        <Text style={{ fontSize: 13, color: '#999', marginTop: 8, textAlign: 'center' }}>Mohon tunggu, sedang memverifikasi pembayaran Anda</Text>
+                    </View>
+                )}
+
+                {paymentStep === 'success' && (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+                        <Animated.View style={{
+                            transform: [{ scale: successAnim }],
+                            backgroundColor: '#E8F5E9', width: 100, height: 100, borderRadius: 50,
+                            justifyContent: 'center', alignItems: 'center', marginBottom: 25,
+                        }}>
+                            <MaterialCommunityIcons name="check-circle" size={60} color="#4CAF50" />
+                        </Animated.View>
+                        <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#333' }}>Pembayaran Berhasil! 🎉</Text>
+                        <Text style={{ fontSize: 14, color: '#666', marginTop: 10, textAlign: 'center' }}>
+                            Saldo bertambah Rp {selectedAmount.toLocaleString('id-ID')}
+                        </Text>
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#1E88E5', marginTop: 8 }}>
+                            Saldo: Rp {currentBalance.toLocaleString('id-ID')}
+                        </Text>
+                        <TouchableOpacity style={[styles.simulateBtn, { marginTop: 30, paddingHorizontal: 40 }]}
+                            onPress={() => { setShowPaymentGateway(false); setPaymentStep('waiting'); router.back(); }}>
+                            <Text style={styles.simulateBtnText}>Kembali</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* Footer — tombol bayar */}
+                {paymentStep === 'waiting' && (
+                    <View style={styles.footer}>
+                        <TouchableOpacity style={styles.simulateBtn} onPress={handleSimulatePayment}>
+                            <Text style={styles.simulateBtnText}>Simulasi Bayar Sekarang</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+            </SafeAreaView>
+        </Modal>
+    );
 
     // STEP 2: Detail instruksi + pilih nominal
     if (selectedMethod) {
         const info = INSTRUCTIONS[selectedMethod];
         return (
             <SafeAreaView style={styles.container}>
+                {renderPaymentGateway()}
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => { setSelectedMethod(''); setSelectedAmount(0); }}>
                         <MaterialCommunityIcons name="chevron-left" size={28} color="#000" />
@@ -208,13 +411,11 @@ export default function TopUpScreen() {
                         </Text>
                     )}
                     <TouchableOpacity
-                        style={[styles.simulateBtn, (isProcessing || selectedAmount === 0) && { backgroundColor: '#CCC' }]}
-                        disabled={isProcessing || selectedAmount === 0}
-                        onPress={handleSimulateTopUp}
+                        style={[styles.simulateBtn, selectedAmount === 0 && { backgroundColor: '#CCC' }]}
+                        disabled={selectedAmount === 0}
+                        onPress={openPaymentGateway}
                     >
-                        <Text style={styles.simulateBtnText}>
-                            {isProcessing ? 'Memproses...' : 'Simulasi Top Up'}
-                        </Text>
+                        <Text style={styles.simulateBtnText}>Lanjutkan Pembayaran</Text>
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>
@@ -301,4 +502,19 @@ const styles = StyleSheet.create({
     balanceInfo: { fontSize: 13, color: '#666', textAlign: 'center', marginBottom: 8 },
     simulateBtn: { backgroundColor: '#1E88E5', padding: 16, borderRadius: 12, alignItems: 'center' },
     simulateBtnText: { color: '#FFF', fontSize: 15, fontWeight: 'bold' },
+
+    // Payment Gateway styles
+    gwTimerBox: { alignItems: 'center', marginBottom: 20, paddingVertical: 15, backgroundColor: '#FFF8E1', borderRadius: 12 },
+    gwTimerText: { fontSize: 28, fontWeight: 'bold', color: '#E53935', marginTop: 5 },
+    gwAmountBox: { alignItems: 'center', marginBottom: 20, padding: 20, backgroundColor: '#E3F2FD', borderRadius: 12 },
+    gwAmountText: { fontSize: 24, fontWeight: 'bold', color: '#1E88E5', marginTop: 5 },
+    gwInfoCard: { backgroundColor: '#FFF', borderRadius: 15, padding: 20, elevation: 2, borderWidth: 1, borderColor: '#F0F0F0', marginBottom: 15 },
+    gwVARow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F8FAFC', padding: 15, borderRadius: 10, marginBottom: 15 },
+    gwVAText: { fontSize: 18, fontWeight: 'bold', color: '#333', letterSpacing: 1 },
+    gwCopyBtn: { flexDirection: 'row', alignItems: 'center' },
+    gwDivider: { height: 1, backgroundColor: '#F0F0F0', marginBottom: 15 },
+    gwDetailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 },
+    gwDetailLabel: { fontSize: 13, color: '#999' },
+    gwDetailValue: { fontSize: 13, color: '#333', fontWeight: '500' },
+    gwHintBox: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: '#F0F7FF', padding: 15, borderRadius: 12 },
 });

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { decode } from 'base64-arraybuffer';
 
 export interface EventModel {
   id: number;
@@ -98,10 +99,62 @@ export const eventService = {
   },
 
   async createEvent(eventData: Partial<EventModel>) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: { message: "Harus login untuk membuat event" } };
+
     const { data, error } = await supabase
       .from('events')
-      .insert([eventData])
+      .insert([{ ...eventData, organizer_id: user.id }])
       .select();
     return { data, error };
+  },
+
+  async updateEvent(id: number, eventData: Partial<EventModel>) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { error: { message: "Harus login untuk mengedit event" } };
+
+    const { data, error } = await supabase
+      .from('events')
+      .update(eventData)
+      .eq('id', id)
+      .eq('organizer_id', user.id) // Pastikan hanya EO pembuat yang bisa edit
+      .select();
+    return { data, error };
+  },
+
+  async getMyOrganizedEvents() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data, error } = await supabase
+      .from('events')
+      .select('*')
+      .eq('organizer_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.log('Error fetch organized events', error);
+      return [];
+    }
+    return data || [];
+  },
+
+  async uploadImage(base64Image: string, fileExt: string = 'jpeg') {
+    const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = `posters/${fileName}`;
+
+    const { data, error } = await supabase.storage
+      .from('events')
+      .upload(filePath, decode(base64Image), {
+        contentType: `image/${fileExt}`
+      });
+
+    if (error) {
+      console.error('Upload Error:', error);
+      throw error;
+    }
+
+    const { data: publicUrlData } = supabase.storage.from('events').getPublicUrl(filePath);
+    return publicUrlData.publicUrl;
   }
 };

@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React, { useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -14,12 +14,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { eventService } from '../services/eventService';
+import { eventService, EventModel } from '../services/eventService';
 
-export default function CreateEventScreen() {
+export default function EditEventScreen() {
+    const { id } = useLocalSearchParams();
+    
     const [form, setForm] = useState({
         title: '',
-        category: 'Musik',
+        category: '',
         date: '',
         location: '',
         price: '',
@@ -29,6 +31,32 @@ export default function CreateEventScreen() {
     const [imageUri, setImageUri] = useState<string | null>(null);
     const [imageBase64, setImageBase64] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [fetching, setFetching] = useState(true);
+
+    useEffect(() => {
+        const fetchEventData = async () => {
+            if (!id) return;
+            const events = await eventService.getMyOrganizedEvents();
+            const eventData = events.find((e: any) => e.id.toString() === id.toString());
+            
+            if (eventData) {
+                setForm({
+                    title: eventData.title,
+                    category: eventData.category,
+                    date: eventData.date,
+                    location: eventData.location,
+                    price: eventData.price.toString(),
+                    description: eventData.description || ''
+                });
+                setImageUri(eventData.image_url);
+            } else {
+                Alert.alert("Error", "Event tidak ditemukan atau Anda bukan pemiliknya");
+                router.back();
+            }
+            setFetching(false);
+        };
+        fetchEventData();
+    }, [id]);
 
     const pickImage = async () => {
         let result = await ImagePicker.launchImageLibraryAsync({
@@ -46,8 +74,8 @@ export default function CreateEventScreen() {
     };
 
     const handleSave = async () => {
-        if (!form.title || !form.price || !form.date || !form.location || !imageBase64) {
-            return Alert.alert("Eits!", "Mohon isi semua field termasuk Poster Event.");
+        if (!form.title || !form.price || !form.date || !form.location) {
+            return Alert.alert("Eits!", "Mohon isi Judul, Tanggal, Lokasi, dan Harga.");
         }
 
         const priceValue = parseInt(form.price);
@@ -58,31 +86,38 @@ export default function CreateEventScreen() {
         try {
             setLoading(true);
 
-            // 1. Upload Gambar
-            const uploadedUrl = await eventService.uploadImage(imageBase64, 'jpeg');
+            let uploadedUrl = imageUri; // Default pakai yang lama
+            if (imageBase64) {
+                uploadedUrl = await eventService.uploadImage(imageBase64, 'jpeg');
+            }
 
-            // 2. Simpan Event
-            const { error } = await eventService.createEvent({
+            const { error } = await eventService.updateEvent(Number(id), {
                 ...form,
                 price: priceValue,
-                image_url: uploadedUrl,
-                status: 'pending',
-                remaining_quota: 100,
-                total_quota: 100
+                image_url: uploadedUrl as string,
+                status: 'pending', // Wajib pending lagi kalau diedit
             });
 
             if (error) throw error;
 
-            Alert.alert("Sukses! 🎉", "Event berhasil diajukan. Tunggu verifikasi admin.", [
-                { text: "Mantap", onPress: () => router.replace('/(tabs)') }
+            Alert.alert("Sukses! 🎉", "Event berhasil diupdate dan sedang menunggu verifikasi ulang dari admin.", [
+                { text: "Mantap", onPress: () => router.back() }
             ]);
 
         } catch (error: any) {
-            Alert.alert("Gagal Terbit", error.message || "Terjadi kesalahan saat menyimpan event.");
+            Alert.alert("Gagal Update", error.message || "Terjadi kesalahan.");
         } finally {
             setLoading(false);
         }
     };
+
+    if (fetching) {
+        return (
+            <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+                <ActivityIndicator size="large" color="#1E88E5" />
+            </SafeAreaView>
+        );
+    }
 
     return (
         <SafeAreaView style={styles.container}>
@@ -90,13 +125,13 @@ export default function CreateEventScreen() {
                 <TouchableOpacity onPress={() => router.back()}>
                     <MaterialCommunityIcons name="arrow-left" size={24} color="#333" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Panel Organizer</Text>
+                <Text style={styles.headerTitle}>Edit Event</Text>
                 <View style={{ width: 24 }} />
             </View>
 
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-                <Text style={styles.sectionTitle}>Buat Event Baru</Text>
-                <Text style={styles.subtitle}>Event yang kamu buat akan ditinjau oleh tim admin.</Text>
+                <Text style={styles.sectionTitle}>Ubah Event Kamu</Text>
+                <Text style={styles.subtitle}>Perhatian: Menyimpan perubahan akan mengembalikan status event menjadi "Pending" untuk direview ulang admin.</Text>
 
                 <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
                     {imageUri ? (
@@ -111,33 +146,33 @@ export default function CreateEventScreen() {
 
                 <View style={styles.formGroup}>
                     <Text style={styles.label}>Nama Event *</Text>
-                    <TextInput style={styles.input} placeholder="Contoh: Konser Tulus 2026" onChangeText={(t) => setForm({ ...form, title: t })} />
+                    <TextInput style={styles.input} value={form.title} onChangeText={(t) => setForm({ ...form, title: t })} />
                 </View>
 
                 <View style={styles.row}>
                     <View style={[styles.formGroup, { flex: 1 }]}>
                         <Text style={styles.label}>Kategori</Text>
-                        <TextInput style={styles.input} placeholder="Pop/Festival" onChangeText={(t) => setForm({ ...form, category: t })} />
+                        <TextInput style={styles.input} value={form.category} onChangeText={(t) => setForm({ ...form, category: t })} />
                     </View>
                     <View style={[styles.formGroup, { flex: 1, marginLeft: 15 }]}>
                         <Text style={styles.label}>Harga Tiket *</Text>
-                        <TextInput style={styles.input} placeholder="500000" keyboardType="numeric" onChangeText={(t) => setForm({ ...form, price: t })} />
+                        <TextInput style={styles.input} value={form.price} keyboardType="numeric" onChangeText={(t) => setForm({ ...form, price: t })} />
                     </View>
                 </View>
 
                 <View style={styles.formGroup}>
                     <Text style={styles.label}>Tanggal Pelaksanaan *</Text>
-                    <TextInput style={styles.input} placeholder="Contoh: 15 Mei 2026" onChangeText={(t) => setForm({ ...form, date: t })} />
+                    <TextInput style={styles.input} value={form.date} onChangeText={(t) => setForm({ ...form, date: t })} />
                 </View>
 
                 <View style={styles.formGroup}>
                     <Text style={styles.label}>Lokasi / Venue *</Text>
-                    <TextInput style={styles.input} placeholder="Contoh: Istora Senayan, Jakarta" onChangeText={(t) => setForm({ ...form, location: t })} />
+                    <TextInput style={styles.input} value={form.location} onChangeText={(t) => setForm({ ...form, location: t })} />
                 </View>
 
                 <View style={styles.formGroup}>
                     <Text style={styles.label}>Deskripsi Event</Text>
-                    <TextInput style={[styles.input, styles.textArea]} placeholder="Detail acara..." multiline onChangeText={(t) => setForm({ ...form, description: t })} />
+                    <TextInput style={[styles.input, styles.textArea]} value={form.description} multiline onChangeText={(t) => setForm({ ...form, description: t })} />
                 </View>
 
                 <TouchableOpacity
@@ -147,8 +182,8 @@ export default function CreateEventScreen() {
                 >
                     {loading ? <ActivityIndicator color="#FFF" /> : (
                         <>
-                            <MaterialCommunityIcons name="rocket-launch" size={20} color="#FFF" />
-                            <Text style={styles.btnText}>Ajukan Verifikasi</Text>
+                            <MaterialCommunityIcons name="content-save" size={20} color="#FFF" />
+                            <Text style={styles.btnText}>Simpan Perubahan</Text>
                         </>
                     )}
                 </TouchableOpacity>
@@ -163,7 +198,7 @@ const styles = StyleSheet.create({
     headerTitle: { fontSize: 16, fontWeight: 'bold', color: '#333' },
     content: { padding: 20, paddingBottom: 40 },
     sectionTitle: { fontSize: 22, fontWeight: 'bold', color: '#1E88E5', marginBottom: 5 },
-    subtitle: { fontSize: 13, color: '#666', marginBottom: 25 },
+    subtitle: { fontSize: 13, color: '#D97706', marginBottom: 25 },
     formGroup: { marginBottom: 15 },
     row: { flexDirection: 'row' },
     label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 },

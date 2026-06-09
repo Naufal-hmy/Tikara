@@ -92,16 +92,19 @@ export default function ProfileScreen() {
 
                     {/* PANEL PENYELENGGARA / ADMIN */}
                     {(profile?.role === 'organizer' || profile?.role === 'admin') && (
-                        <TouchableOpacity
-                            style={[styles.menuItem, { backgroundColor: '#E1F5FE', borderColor: '#B3E5FC', borderWidth: 1 }]}
-                            onPress={() => router.push('/admin-dashboard')}
-                        >
-                            <View style={styles.menuLeft}>
-                                <MaterialCommunityIcons name="view-dashboard-outline" size={22} color="#1E88E5" />
-                                <Text style={[styles.menuLabel, { color: '#1E88E5', fontWeight: 'bold' }]}>Dashboard Admin</Text>
-                            </View>
-                            <MaterialCommunityIcons name="chevron-right" size={20} color="#1E88E5" />
-                        </TouchableOpacity>
+                        <>
+                            <ProfileMenu icon="calendar-star" title="Event Buatanku" onPress={() => router.push('/my-events')} />
+                            <TouchableOpacity
+                                style={[styles.menuItem, { backgroundColor: '#E1F5FE', borderColor: '#B3E5FC', borderWidth: 1 }]}
+                                onPress={() => router.push('/admin-dashboard')}
+                            >
+                                <View style={styles.menuLeft}>
+                                    <MaterialCommunityIcons name="view-dashboard-outline" size={22} color="#1E88E5" />
+                                    <Text style={[styles.menuLabel, { color: '#1E88E5', fontWeight: 'bold' }]}>Dashboard Admin</Text>
+                                </View>
+                                <MaterialCommunityIcons name="chevron-right" size={20} color="#1E88E5" />
+                            </TouchableOpacity>
+                        </>
                     )}
 
                     <View style={styles.divider} />

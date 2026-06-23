@@ -34,25 +34,27 @@ export const orderService = {
     /**
      * Membeli tiket — coba RPC dulu, fallback ke direct insert jika RPC tidak ada
      */
-    async purchaseTicket(eventId: number, quantity: number, totalPrice: number) {
+    async purchaseTicket(eventId: number, quantity: number, totalPrice: number, paymentMethod: string = 'saldo') {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return { success: false, message: 'Anda belum login' };
 
-        // Coba RPC dulu
-        try {
-            const { data, error } = await supabase.rpc('purchase_ticket', {
-                p_event_id: eventId,
-                p_quantity: quantity,
-            });
+        // Coba RPC dulu jika menggunakan saldo
+        if (paymentMethod === 'saldo') {
+            try {
+                const { data, error } = await supabase.rpc('purchase_ticket', {
+                    p_event_id: eventId,
+                    p_quantity: quantity,
+                });
 
-            if (!error && data) {
-                return data as { success: boolean; message: string; order_id?: string };
+                if (!error && data) {
+                    return data as { success: boolean; message: string; order_id?: string };
+                }
+
+                // Jika RPC error (function not found), fallback ke direct insert
+                console.log("RPC tidak tersedia, pakai fallback direct insert:", error?.message);
+            } catch (e) {
+                console.log("RPC exception, menggunakan fallback");
             }
-
-            // Jika RPC error (function not found), fallback ke direct insert
-            console.log("RPC tidak tersedia, pakai fallback direct insert:", error?.message);
-        } catch (e) {
-            console.log("RPC exception, menggunakan fallback");
         }
 
         // ========= FALLBACK: Direct Insert =========

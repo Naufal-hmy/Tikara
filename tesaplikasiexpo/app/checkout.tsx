@@ -40,7 +40,7 @@ export default function CheckoutScreen() {
     const biayaLayanan = finalPrice * 0.05;
     const grandTotal = finalPrice + pajak + biayaLayanan;
 
-    const orderId = `${Date.now().toString().slice(-10)}TIX`;
+    const [orderId] = useState(() => `${Date.now().toString().slice(-10)}TIX`);
 
     // Timer countdown saat masuk step 2+
     const timerRef = useRef<any>(null);
@@ -147,7 +147,7 @@ export default function CheckoutScreen() {
         setEwalletStep('processing');
         await new Promise(res => setTimeout(res, 2500));
         try {
-            const result = await orderService.purchaseTicket(Number(eventId), finalTickets, grandTotal);
+            const result = await orderService.purchaseTicket(Number(eventId), finalTickets, grandTotal, selectedMethod);
             if (result.success) {
                 setEwalletStep('success');
                 Animated.spring(successScale, { toValue: 1, friction: 4, tension: 40, useNativeDriver: true }).start();
@@ -536,7 +536,7 @@ export default function CheckoutScreen() {
         // Simulate verification delay
         await new Promise(res => setTimeout(res, 2500));
         try {
-            const result = await orderService.purchaseTicket(Number(eventId), finalTickets, grandTotal);
+            const result = await orderService.purchaseTicket(Number(eventId), finalTickets, grandTotal, 'qris');
             if (result.success) {
                 setIsProcessing(false);
                 setStep(5); // go to success step

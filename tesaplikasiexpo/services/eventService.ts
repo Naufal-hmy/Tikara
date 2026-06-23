@@ -26,7 +26,36 @@ export const eventService = {
       .order('id', { ascending: true });
 
     if (error) throw error;
-    return (data as EventModel[]) || [];
+    
+    let events = (data as EventModel[]) || [];
+
+    // Filter past events
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const indonesianMonths: Record<string, number> = {
+      'jan': 0, 'januari': 0, 'feb': 1, 'februari': 1, 'mar': 2, 'maret': 2,
+      'apr': 3, 'april': 3, 'mei': 4, 'jun': 5, 'juni': 5, 'jul': 6, 'juli': 6,
+      'agu': 7, 'agustus': 7, 'sep': 8, 'september': 8, 'okt': 9, 'oktober': 9,
+      'nov': 10, 'november': 10, 'des': 11, 'desember': 11
+    };
+
+    events = events.filter(evt => {
+      if (!evt.date) return true; // keep if no date
+      const parts = evt.date.toLowerCase().split(' ');
+      if (parts.length >= 3) {
+        const day = parseInt(parts[0], 10);
+        const month = indonesianMonths[parts[1]] !== undefined ? indonesianMonths[parts[1]] : parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+          const evtDate = new Date(year, month, day);
+          return evtDate >= today;
+        }
+      }
+      return true; // if unparseable, keep it just in case
+    });
+
+    return events;
   },
 
   async getEventById(id: number | string): Promise<EventModel | null> {

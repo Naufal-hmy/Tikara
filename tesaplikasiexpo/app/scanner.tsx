@@ -33,7 +33,7 @@ export default function ScannerScreen() {
             const { data: { user } } = await supabase.auth.getUser();
             const { data: myProfile } = await supabase.from('profiles').select('role').eq('id', user?.id).single();
 
-            if (myProfile?.role !== 'organizer') {
+            if (myProfile?.role !== 'eo') {
                 Alert.alert("Akses Ditolak!", "Cuma akun Organizer yang bisa scan tiket.");
                 return;
             }

@@ -1,7 +1,7 @@
 @extends('layouts.admin')
 
-@section('title', 'Manage Events')
-@section('header', 'Manage Events')
+@section('title', 'Events from EO')
+@section('header', 'Events from EO')
 
 @section('content')
 
@@ -13,9 +13,9 @@
 
 <div class="card">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;">
-        <h3 style="margin:0;">All Events</h3>
+        <h3 style="margin:0;">Approved/Published Events from EO</h3>
         
-        <form action="{{ route('admin.events.index') }}" method="GET" style="display: flex; gap: 0.5rem; margin: 0; flex: 1; flex-wrap: wrap; align-items: center;">
+        <form action="{{ route('admin.events.eo_approved') }}" method="GET" style="display: flex; gap: 0.5rem; margin: 0; flex: 1; flex-wrap: wrap; align-items: center;">
             <input type="text" name="search" value="{{ request('search') }}" placeholder="Search by title..." style="flex: 1; min-width: 150px; padding: 0.5rem 1rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; outline: none;">
             
             <select name="filter_category" style="padding: 0.5rem 1rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; outline: none; background: white;">
@@ -37,17 +37,16 @@
             <button type="submit" class="btn btn-primary" style="padding: 0.5rem 1rem;"><i class="ph ph-magnifying-glass"></i> Filter</button>
             
             @if(request('search') || request('filter_date') || request('filter_category') || request('filter_location'))
-                <a href="{{ route('admin.events.index') }}" class="btn" style="background: #E5E7EB; color: #374151;">Clear</a>
+                <a href="{{ route('admin.events.eo_approved') }}" class="btn" style="background: #E5E7EB; color: #374151;">Clear</a>
             @endif
         </form>
-
-        <a href="{{ route('admin.events.create') }}" class="btn btn-primary"><i class="ph ph-plus"></i> Add New Event</a>
     </div>
 
     <table>
         <thead>
             <tr>
                 <th>Poster</th>
+                <th>EO Name</th>
                 <th>Title & Info</th>
                 <th>Location</th>
                 <th>Price</th>
@@ -65,6 +64,10 @@
                     @else
                         <div style="width: 50px; height: 50px; background: #E5E7EB; border-radius: 0.5rem; display: flex; align-items: center; justify-content: center; color: #9CA3AF;"><i class="ph ph-image"></i></div>
                     @endif
+                </td>
+                <td>
+                    <strong>{{ $event->eo ? $event->eo->full_name : 'Unknown' }}</strong><br>
+                    <small style="color: var(--text-muted);">{{ $event->eo && $event->eo->phone_number ? $event->eo->phone_number : '-' }}</small>
                 </td>
                 <td>
                     <strong>{{ $event->title }}</strong><br>

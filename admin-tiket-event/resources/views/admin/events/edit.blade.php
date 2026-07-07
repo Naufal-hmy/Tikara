@@ -27,7 +27,12 @@
             </div>
             <div>
                 <label style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Category</label>
-                <input type="text" name="category" value="{{ old('category', $event->category) }}" required style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; box-sizing: border-box;">
+                <select name="category" required style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; box-sizing: border-box; background: white;">
+                    <option value="" disabled>Select Category</option>
+                    @foreach($categories as $category)
+                        <option value="{{ $category->name }}" {{ old('category', $event->category) == $category->name ? 'selected' : '' }}>{{ $category->name }}</option>
+                    @endforeach
+                </select>
             </div>
             
             <div>
@@ -35,8 +40,8 @@
                 <input type="date" name="date" value="{{ old('date', \Carbon\Carbon::parse($event->date)->format('Y-m-d')) }}" required style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; box-sizing: border-box;">
             </div>
             <div>
-                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Time</label>
-                <input type="text" name="time" value="{{ old('time', $event->time) }}" required style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; box-sizing: border-box;">
+                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Time (Waktu)</label>
+                <input type="time" name="time" value="{{ old('time', $event->time) }}" required style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; box-sizing: border-box;">
             </div>
             
             <div style="grid-column: span 2;">
@@ -57,20 +62,21 @@
                 <input type="number" name="total_quota" value="{{ old('total_quota', $event->total_quota) }}" min="1" required style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; box-sizing: border-box;">
             </div>
             <div>
-                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Remaining Quota</label>
-                <input type="number" name="remaining_quota" value="{{ old('remaining_quota', $event->remaining_quota) }}" min="0" required style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; box-sizing: border-box;">
+                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem; color: #6B7280;">Remaining Quota (Auto-calculated)</label>
+                <input type="number" name="remaining_quota" value="{{ $event->remaining_quota }}" readonly style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; box-sizing: border-box; background: #F3F4F6; color: #6B7280; cursor: not-allowed;">
             </div>
             <div>
                 <label style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Status</label>
                 <select name="status" required style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; box-sizing: border-box; background: white;">
                     <option value="published" {{ old('status', $event->status) == 'published' ? 'selected' : '' }}>Published</option>
                     <option value="draft" {{ old('status', $event->status) == 'draft' ? 'selected' : '' }}>Draft</option>
+                    <option value="canceled" {{ old('status', $event->status) == 'canceled' ? 'selected' : '' }}>Canceled</option>
                 </select>
             </div>
             
             <div style="grid-column: span 2;">
-                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Description</label>
-                <textarea name="description" rows="5" required style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; box-sizing: border-box;">{{ old('description', $event->description) }}</textarea>
+                <label style="display: block; font-weight: 600; margin-bottom: 0.5rem;">Description (Optional)</label>
+                <textarea name="description" rows="5" style="width: 100%; padding: 0.75rem; border: 1px solid #D1D5DB; border-radius: 0.5rem; box-sizing: border-box;">{{ old('description', $event->description) }}</textarea>
             </div>
             
             <div style="grid-column: span 2;">

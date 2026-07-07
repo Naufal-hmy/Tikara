@@ -199,3 +199,61 @@ tr:hover td {
     background: var(--primary-hover);
     transform: scale(1.02);
 }
+
+/* Responsive Layout */
+@media (max-width: 768px) {
+    body {
+        flex-direction: column;
+    }
+    
+    .sidebar {
+        position: static;
+        width: 100%;
+        height: auto;
+        padding: 1rem;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.5rem;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .sidebar h2 {
+        width: 100%;
+        text-align: center;
+        justify-content: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .sidebar a {
+        margin-bottom: 0;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+    }
+    
+    .sidebar > div {
+        width: 100%;
+        margin-top: 0.5rem !important;
+        padding-top: 0.5rem !important;
+    }
+
+    .main-content {
+        margin-left: 0;
+        width: 100%;
+        padding: 1rem;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    /* Make tables scrollable horizontally on mobile */
+    .card {
+        overflow-x: auto;
+    }
+    
+    table {
+        min-width: 600px;
+    }
+}

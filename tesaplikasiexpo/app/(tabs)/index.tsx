@@ -108,8 +108,12 @@ export default function HomeScreen() {
     if (!events || events.length === 0) return [];
     switch (activeChip) {
       case 'populer':
-        // Sort by price descending (event populer biasanya mahal / banyak terjual)
-        return [...events].sort((a, b) => (b.price || 0) - (a.price || 0));
+        // Sort by tickets sold (total_quota - remaining_quota) descending
+        return [...events].sort((a, b) => {
+          const soldA = (a.total_quota || 0) - (a.remaining_quota || 0);
+          const soldB = (b.total_quota || 0) - (b.remaining_quota || 0);
+          return soldB - soldA;
+        });
       case 'terbaru':
         // Sort by ID descending (terbaru = ID terbesar)
         return [...events].sort((a, b) => b.id - a.id);
@@ -258,7 +262,7 @@ export default function HomeScreen() {
         </ScrollView>
 
         {/* FAB KHUSUS ORGANIZER (Scanner & Add Event) */}
-        {profile?.role === 'organizer' && (
+        {profile?.role === 'eo' && (
           <View style={{ position: 'absolute', bottom: 30, right: 20, gap: 10 }}>
             <TouchableOpacity
               style={[styles.fab, { backgroundColor: '#333' }]}

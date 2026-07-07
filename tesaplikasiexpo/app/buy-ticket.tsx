@@ -7,28 +7,21 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function BuyTicketScreen() {
     const { id, price: p } = useLocalSearchParams();
     // State untuk jumlah tiket
-    const [silverCount, setSilverCount] = useState(0);
-    const [goldCount, setGoldCount] = useState(0);
+    const [ticketCount, setTicketCount] = useState(0);
 
-    const pricePerTicket = Number(p) || 960000;
-    const silverPrice = pricePerTicket;
-    const goldPrice = pricePerTicket + 50000;
-
-    const totalTickets = silverCount + goldCount;
-    const totalPrice = (silverCount * silverPrice) + (goldCount * goldPrice);
+    const pricePerTicket = Number(p) || 0;
+    const totalPrice = ticketCount * pricePerTicket;
 
     const handleCheckout = () => {
-        if (totalTickets === 0) return;
+        if (ticketCount === 0) return;
         router.push({
             pathname: '/checkout',
             params: {
                 id,
-                silverQty: silverCount,
-                goldQty: goldCount,
-                silverPrice: silverPrice,
-                goldPrice: goldPrice,
+                qty: ticketCount,
+                price: pricePerTicket,
                 totalPrice: totalPrice,
-                totalTickets: totalTickets
+                totalTickets: ticketCount
             }
         });
     };
@@ -40,39 +33,29 @@ export default function BuyTicketScreen() {
                 <TouchableOpacity onPress={() => router.back()}>
                     <MaterialCommunityIcons name="chevron-left" size={30} color="#000" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Beli tiket</Text>
+                <Text style={styles.headerTitle}>Beli Tiket</Text>
             </View>
 
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
-                {/* Tiket Silver */}
+                {/* Tiket Utama */}
                 <TicketCategoryCard
-                    title="Silver"
-                    priceDesc={`Rp.${silverPrice.toLocaleString('id-ID')} + pajak 10% dan layanan 5%`}
-                    price={silverPrice}
-                    count={silverCount}
-                    onAdd={() => setSilverCount(silverCount + 1)}
-                    onRemove={() => silverCount > 0 && setSilverCount(silverCount - 1)}
-                />
-
-                {/* Tiket Gold */}
-                <TicketCategoryCard
-                    title="Gold"
-                    priceDesc={`Rp.${goldPrice.toLocaleString('id-ID')} + pajak 10% dan layanan 5%`}
-                    price={goldPrice}
-                    count={goldCount}
-                    onAdd={() => setGoldCount(goldCount + 1)}
-                    onRemove={() => goldCount > 0 && setGoldCount(goldCount - 1)}
+                    title="Tiket Event"
+                    priceDesc={`Rp.${pricePerTicket.toLocaleString('id-ID')} + pajak 10% dan layanan 5%`}
+                    price={pricePerTicket}
+                    count={ticketCount}
+                    onAdd={() => setTicketCount(ticketCount + 1)}
+                    onRemove={() => ticketCount > 0 && setTicketCount(ticketCount - 1)}
                 />
 
             </ScrollView>
 
             {/* Floating Footer - Hanya muncul jika ada tiket yang dipilih */}
-            {totalTickets > 0 && (
+            {ticketCount > 0 && (
                 <View style={styles.footer}>
                     <View>
                         <Text style={styles.totalPriceText}>IDR {totalPrice.toLocaleString('id-ID')}</Text>
-                        <Text style={styles.totalTicketCount}>{totalTickets} Tiket</Text>
+                        <Text style={styles.totalTicketCount}>{ticketCount} Tiket</Text>
                     </View>
                     <TouchableOpacity
                         style={styles.checkoutBtn}

@@ -21,8 +21,13 @@ export default function AdminDashboardScreen() {
             const userData = await authService.getCurrentProfile();
             setProfile(userData);
             
-            // Asumsikan admin bisa melihat semua event, organizer hanya eventnya (tapi saat ini kita ambil semua)
-            const eventData = await eventService.getAllEvents();
+            // EO melihat event miliknya, Admin (jika login di mobile) melihat semua
+            let eventData = [];
+            if (userData?.role === 'admin') {
+                eventData = await eventService.getAllEvents();
+            } else {
+                eventData = await eventService.getMyOrganizedEvents();
+            }
             setEvents(eventData);
         } catch(e) {
             console.error(e);
@@ -34,6 +39,9 @@ export default function AdminDashboardScreen() {
     if (loading) {
         return <View style={styles.centered}><ActivityIndicator size="large" color="#1E88E5" /></View>;
     }
+
+    const activeEvents = events.filter(e => e.status !== 'rejected');
+    const rejectedEvents = events.filter(e => e.status === 'rejected');
 
     return (
         <SafeAreaView style={styles.container} edges={['top']}>
@@ -51,18 +59,20 @@ export default function AdminDashboardScreen() {
                     <View style={styles.statCard}>
                         <MaterialCommunityIcons name="calendar-multiselect" size={30} color="#1E88E5" />
                         <Text style={styles.statNumber}>{events.length}</Text>
-                        <Text style={styles.statLabel}>Total Event</Text>
+                        <Text style={styles.statLabel}>Total Event Diajukan</Text>
                     </View>
                     <View style={styles.statCard}>
                         <MaterialCommunityIcons name="ticket-confirmation" size={30} color="#E53935" />
-                        <Text style={styles.statNumber}>150+</Text>
+                        <Text style={styles.statNumber}>
+                            {events.reduce((sum, e) => sum + ((e.total_quota || 0) - (e.remaining_quota || 0)), 0)}
+                        </Text>
                         <Text style={styles.statLabel}>Tiket Terjual</Text>
                     </View>
                 </View>
 
                 {/* Aksi Cepat */}
                 <Text style={styles.sectionTitle}>Aksi Cepat</Text>
-                <TouchableOpacity style={styles.actionBtn}>
+                <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/create-event')}>
                     <MaterialCommunityIcons name="plus-circle-outline" size={24} color="#FFF" />
                     <Text style={styles.actionBtnText}>Buat Event Baru</Text>
                 </TouchableOpacity>
@@ -74,19 +84,50 @@ export default function AdminDashboardScreen() {
                     </TouchableOpacity>
                 )}
 
+                {/* Event Ditolak (Perlu Revisi) */}
+                {rejectedEvents.length > 0 && (
+                    <>
+                        <Text style={[styles.sectionTitle, { marginTop: 30, color: '#D32F2F' }]}>Event Ditolak (Perlu Revisi)</Text>
+                        {rejectedEvents.map((e) => (
+                            <View key={e.id} style={[styles.eventItem, { borderColor: '#FFCDD2', borderWidth: 1 }]}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.eventTitle}>{e.title}</Text>
+                                    <Text style={[styles.eventDate, { color: '#D32F2F' }]}>Status: Ditolak</Text>
+                                </View>
+                                <TouchableOpacity 
+                                    style={[styles.editBtn, { backgroundColor: '#FFEBEE' }]}
+                                    onPress={() => router.push({ pathname: '/edit-event', params: { id: e.id } })}
+                                >
+                                    <MaterialCommunityIcons name="pencil" size={20} color="#D32F2F" />
+                                    <Text style={{ color: '#D32F2F', fontSize: 12, marginLeft: 5, fontWeight: 'bold' }}>Revisi</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ))}
+                    </>
+                )}
+
                 {/* Event Aktif */}
-                <Text style={[styles.sectionTitle, { marginTop: 30 }]}>Event Aktif Anda</Text>
-                {events.slice(0, 3).map((e) => (
+                <Text style={[styles.sectionTitle, { marginTop: 30 }]}>Event Terdaftar Anda</Text>
+                {activeEvents.slice(0, 3).map((e) => (
                     <View key={e.id} style={styles.eventItem}>
                         <View style={{ flex: 1 }}>
                             <Text style={styles.eventTitle}>{e.title}</Text>
-                            <Text style={styles.eventDate}>{e.date}</Text>
+                            <Text style={styles.eventDate}>{e.date} • {e.status.toUpperCase()}</Text>
                         </View>
-                        <TouchableOpacity style={styles.editBtn}>
+                        <TouchableOpacity 
+                            style={styles.editBtn}
+                            onPress={() => router.push({ pathname: '/edit-event', params: { id: e.id } })}
+                        >
                             <MaterialCommunityIcons name="pencil" size={20} color="#1E88E5" />
                         </TouchableOpacity>
                     </View>
                 ))}
+                
+                {activeEvents.length > 3 && (
+                     <TouchableOpacity style={{ alignItems: 'center', marginTop: 10 }} onPress={() => router.push('/my-events')}>
+                         <Text style={{ color: '#1E88E5', fontWeight: 'bold' }}>Lihat Semua Event</Text>
+                     </TouchableOpacity>
+                )}
             </ScrollView>
         </SafeAreaView>
     );
@@ -102,7 +143,7 @@ const styles = StyleSheet.create({
     statsRow: { flexDirection: 'row', gap: 15, marginBottom: 30 },
     statCard: { flex: 1, backgroundColor: '#FFF', padding: 20, borderRadius: 15, alignItems: 'center', elevation: 2 },
     statNumber: { fontSize: 24, fontWeight: 'bold', color: '#333', marginTop: 10 },
-    statLabel: { fontSize: 12, color: '#666', marginTop: 5 },
+    statLabel: { fontSize: 12, color: '#666', marginTop: 5, textAlign: 'center' },
 
     sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 15 },
     actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1E88E5', padding: 15, borderRadius: 10, gap: 10 },
@@ -111,5 +152,5 @@ const styles = StyleSheet.create({
     eventItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 15, borderRadius: 12, marginBottom: 10, elevation: 1 },
     eventTitle: { fontSize: 14, fontWeight: 'bold', color: '#333', marginBottom: 4 },
     eventDate: { fontSize: 12, color: '#666' },
-    editBtn: { padding: 10, backgroundColor: '#F0F8FF', borderRadius: 10 }
+    editBtn: { flexDirection: 'row', alignItems: 'center', padding: 10, backgroundColor: '#F0F8FF', borderRadius: 10 }
 });

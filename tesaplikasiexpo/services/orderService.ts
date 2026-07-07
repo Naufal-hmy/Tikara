@@ -63,6 +63,7 @@ export const orderService = {
             const { data: eventData, error: eventErr } = await supabase
                 .from('events')
                 .select('remaining_quota, title')
+                .is('deleted_at', null)
                 .eq('id', eventId)
                 .single();
 

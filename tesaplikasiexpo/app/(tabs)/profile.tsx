@@ -73,10 +73,10 @@ export default function ProfileScreen() {
                     <Text style={styles.name}>{profile?.full_name || 'User'}</Text>
                     <Text style={styles.email}>{email}</Text>
                     {/* Badge untuk Admin / Penyelenggara */}
-                    {(profile?.role === 'organizer' || profile?.role === 'admin') && (
+                    {(profile?.role === 'eo' || profile?.role === 'admin') && (
                         <View style={styles.organizerBadge}>
                             <Text style={styles.organizerBadgeText}>
-                                {profile?.role === 'admin' ? 'SUPER ADMIN' : 'OFFICIAL ORGANIZER'}
+                                {profile?.role === 'admin' ? 'SUPER ADMIN' : 'EVENT ORGANIZER'}
                             </Text>
                         </View>
                     )}
@@ -91,7 +91,7 @@ export default function ProfileScreen() {
                     <ProfileMenu icon="bookmark-outline" title="Bookmark" onPress={() => router.push('/bookmarks')} />
 
                     {/* PANEL PENYELENGGARA / ADMIN */}
-                    {(profile?.role === 'organizer' || profile?.role === 'admin') && (
+                    {(profile?.role === 'eo' || profile?.role === 'admin') && (
                         <>
                             <ProfileMenu icon="calendar-star" title="Event Buatanku" onPress={() => router.push('/my-events')} />
                             <TouchableOpacity

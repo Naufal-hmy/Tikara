@@ -27,18 +27,13 @@ export default function CheckoutScreen() {
     const successScale = useRef(new Animated.Value(0)).current;
 
     const eventId = params.id;
-    const sQty = Number(params.silverQty) || 0;
-    const gQty = Number(params.goldQty) || 0;
-    const silverPriceVal = Number(params.silverPrice) || 0;
-    const goldPriceVal = Number(params.goldPrice) || 0;
-    const finalPrice = Number(params.totalPrice) || 0;
     const finalTickets = Number(params.totalTickets) || 0;
+    const basePrice = Number(params.price) || 0;
+    const subTotalPrice = finalTickets * basePrice;
 
-
-
-    const pajak = finalPrice * 0.10;
-    const biayaLayanan = finalPrice * 0.05;
-    const grandTotal = finalPrice + pajak + biayaLayanan;
+    const pajak = subTotalPrice * 0.10;
+    const biayaLayanan = subTotalPrice * 0.05;
+    const grandTotal = subTotalPrice + pajak + biayaLayanan;
 
     const [orderId] = useState(() => `${Date.now().toString().slice(-10)}TIX`);
 
@@ -205,7 +200,7 @@ export default function CheckoutScreen() {
                                 </View>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
                                     <Text style={{ color: '#999', fontSize: 13 }}>Subtotal</Text>
-                                    <Text style={{ color: '#333', fontSize: 13, fontWeight: '500' }}>IDR {finalPrice.toLocaleString('id-ID')}</Text>
+                                    <Text style={{ color: '#333', fontSize: 13, fontWeight: '500' }}>IDR {subTotalPrice.toLocaleString('id-ID')}</Text>
                                 </View>
                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10 }}>
                                     <Text style={{ color: '#999', fontSize: 13 }}>Pajak (10%)</Text>
@@ -319,11 +314,11 @@ export default function CheckoutScreen() {
                             <Text style={styles.valueText}>{event.date}</Text>
                         </View>
 
-                        {/* Tiket Silver */}
-                        {sQty > 0 && (
+                        {/* Tiket Pilihan */}
+                        {finalTickets > 0 && (
                             <View style={styles.ticketSection}>
-                                <Text style={styles.ticketCatTitle}>Silver</Text>
-                                <Text style={styles.ticketPrice}>Rp.{silverPriceVal.toLocaleString('id-ID')} + pajak 10% dan layanan 5%</Text>
+                                <Text style={styles.ticketCatTitle}>Tiket Event</Text>
+                                <Text style={styles.ticketPrice}>Rp.{basePrice.toLocaleString('id-ID')} + pajak 10% dan layanan 5%</Text>
                                 <View style={styles.benefitRow}><MaterialCommunityIcons name="history" size={16} color="#666" /><Text style={styles.benefitText}>Tidak bisa refund</Text></View>
                                 <View style={styles.benefitRow}><MaterialCommunityIcons name="ticket-percent-outline" size={16} color="#666" /><Text style={styles.benefitText}>tiket FLEXI: Berlaku 1 hari sejak tanggal terpilih</Text></View>
                                 <View style={styles.benefitRow}><MaterialCommunityIcons name="seat-outline" size={16} color="#666" /><Text style={styles.benefitText}>Tempat duduk bebas: Bebas menempati kursi kosong di venue</Text></View>
@@ -331,20 +326,7 @@ export default function CheckoutScreen() {
                                 
                                 {/* Counter */}
                                 <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginTop: 10 }}>
-                                    <View style={styles.counterBtn}><Text style={styles.counterText}>{sQty}</Text></View>
-                                </View>
-                            </View>
-                        )}
-
-                        {/* Tiket Gold */}
-                        {gQty > 0 && (
-                            <View style={styles.ticketSection}>
-                                <Text style={styles.ticketCatTitle}>Gold</Text>
-                                <Text style={styles.ticketPrice}>Rp.{goldPriceVal.toLocaleString('id-ID')} + pajak 10% dan layanan 5%</Text>
-                                <View style={styles.benefitRow}><MaterialCommunityIcons name="history" size={16} color="#666" /><Text style={styles.benefitText}>Tidak bisa refund</Text></View>
-                                <View style={styles.benefitRow}><MaterialCommunityIcons name="seat-outline" size={16} color="#666" /><Text style={styles.benefitText}>Tempat duduk bebas</Text></View>
-                                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 12, marginTop: 10 }}>
-                                    <View style={styles.counterBtn}><Text style={styles.counterText}>{gQty}</Text></View>
+                                    <View style={styles.counterBtn}><Text style={styles.counterText}>{finalTickets}</Text></View>
                                 </View>
                             </View>
                         )}
@@ -361,7 +343,7 @@ export default function CheckoutScreen() {
 
                 {/* Footer */}
                 <View style={styles.footer}>
-                    <View style={styles.summaryRow}><Text style={styles.sumLabel}>Subtotal</Text><Text style={styles.sumValue}>IDR {finalPrice.toLocaleString('id-ID')}</Text></View>
+                    <View style={styles.summaryRow}><Text style={styles.sumLabel}>Subtotal</Text><Text style={styles.sumValue}>IDR {subTotalPrice.toLocaleString('id-ID')}</Text></View>
                     <View style={styles.summaryRow}><Text style={styles.sumLabel}>Pajak</Text><Text style={styles.sumValue}>IDR {pajak.toLocaleString('id-ID')}</Text></View>
                     <View style={styles.summaryRow}><Text style={styles.sumLabel}>Biaya layanan</Text><Text style={styles.sumValue}>IDR {biayaLayanan.toLocaleString('id-ID')}</Text></View>
                     <TouchableOpacity style={styles.mainBtn} onPress={() => setStep(2)}>
@@ -432,7 +414,7 @@ export default function CheckoutScreen() {
 
                 {/* Footer */}
                 <View style={styles.footer}>
-                    <View style={styles.summaryRow}><Text style={styles.sumLabel}>Subtotal</Text><Text style={styles.sumValue}>IDR {finalPrice.toLocaleString('id-ID')}</Text></View>
+                    <View style={styles.summaryRow}><Text style={styles.sumLabel}>Subtotal</Text><Text style={styles.sumValue}>IDR {subTotalPrice.toLocaleString('id-ID')}</Text></View>
                     <View style={styles.summaryRow}><Text style={styles.sumLabel}>Pajak</Text><Text style={styles.sumValue}>IDR {pajak.toLocaleString('id-ID')}</Text></View>
                     <View style={styles.summaryRow}><Text style={styles.sumLabel}>Biaya layanan</Text><Text style={styles.sumValue}>IDR {biayaLayanan.toLocaleString('id-ID')}</Text></View>
                     <TouchableOpacity style={styles.mainBtn} onPress={() => setStep(3)}>

@@ -27,7 +27,13 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const getCategoryColor = (category: string) => {
-    return CATEGORY_COLORS[category] || '#1E88E5';
+    if (!category) return '#1E88E5';
+    if (CATEGORY_COLORS[category]) return CATEGORY_COLORS[category];
+    let hash = 0;
+    for (let i = 0; i < category.length; i++) {
+        hash = category.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return `#${((hash & 0x00FFFFFF) >>> 0).toString(16).padStart(6, '0')}`;
 };
 
 export default function EventScreen() {
@@ -87,6 +93,16 @@ export default function EventScreen() {
 
     const parseEventDate = (dateStr: string) => {
         if (!dateStr) return null;
+        if (dateStr.includes('-')) {
+            const parts = dateStr.split('-');
+            if (parts.length === 3) {
+                return {
+                    year: parseInt(parts[0]),
+                    month: parseInt(parts[1]) - 1,
+                    day: parseInt(parts[2])
+                };
+            }
+        }
         const parts = dateStr.split(' ');
         if (parts.length < 3) return null;
         const day = parseInt(parts[0]);
@@ -111,7 +127,9 @@ export default function EventScreen() {
 
     // Map tanggal → kategori event (untuk warna angka tanggal)
     const dateEventMap: Record<number, string[]> = {};
+    const presentCategories = new Set<string>();
     events.forEach(e => {
+        if (e.category) presentCategories.add(e.category);
         const parsed = parseEventDate(e.date);
         if (parsed && parsed.month === currentMonth && parsed.year === currentYear) {
             if (!dateEventMap[parsed.day]) dateEventMap[parsed.day] = [];
@@ -199,9 +217,9 @@ export default function EventScreen() {
 
                     {/* Legend warna kategori */}
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 15 }}>
-                        {Object.entries(CATEGORY_COLORS).map(([cat, color]) => (
+                        {Array.from(presentCategories).map((cat) => (
                             <View key={cat} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color }} />
+                                <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: getCategoryColor(cat) }} />
                                 <Text style={{ fontSize: 10, color: '#666' }}>{cat}</Text>
                             </View>
                         ))}

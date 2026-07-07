@@ -10,11 +10,14 @@ import {
     TextInput,
     TouchableOpacity,
     View,
-    Image
+    Image,
+    Modal,
+    Pressable
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { eventService, EventModel } from '../services/eventService';
+import { CustomDatePicker, CustomTimePicker } from '../components/CustomDateTimePicker';
 
 export default function EditEventScreen() {
     const { id } = useLocalSearchParams();
@@ -23,8 +26,11 @@ export default function EditEventScreen() {
         title: '',
         category: '',
         date: '',
+        time: '',
         location: '',
+        address_detail: '',
         price: '',
+        total_quota: '',
         description: ''
     });
 
@@ -33,9 +39,21 @@ export default function EditEventScreen() {
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
 
+    const [categories, setCategories] = useState<string[]>([]);
+    const [showCategoryModal, setShowCategoryModal] = useState(false);
+    
+    // Pickers state
+    const [showDatePicker, setShowDatePicker] = useState(false);
+    const [showTimePicker, setShowTimePicker] = useState(false);
+
     useEffect(() => {
-        const fetchEventData = async () => {
+        const loadInitialData = async () => {
             if (!id) return;
+
+            // Load categories first
+            const cats = await eventService.getCategories();
+            setCategories(cats);
+
             const events = await eventService.getMyOrganizedEvents();
             const eventData = events.find((e: any) => e.id.toString() === id.toString());
             
@@ -44,8 +62,11 @@ export default function EditEventScreen() {
                     title: eventData.title,
                     category: eventData.category,
                     date: eventData.date,
+                    time: eventData.time || '',
                     location: eventData.location,
+                    address_detail: eventData.address_detail || '',
                     price: eventData.price.toString(),
+                    total_quota: eventData.total_quota?.toString() || '',
                     description: eventData.description || ''
                 });
                 setImageUri(eventData.image_url);
@@ -55,7 +76,7 @@ export default function EditEventScreen() {
             }
             setFetching(false);
         };
-        fetchEventData();
+        loadInitialData();
     }, [id]);
 
     const pickImage = async () => {
@@ -74,13 +95,18 @@ export default function EditEventScreen() {
     };
 
     const handleSave = async () => {
-        if (!form.title || !form.price || !form.date || !form.location) {
-            return Alert.alert("Eits!", "Mohon isi Judul, Tanggal, Lokasi, dan Harga.");
+        if (!form.title || !form.price || !form.date || !form.time || !form.location || !form.address_detail || !form.total_quota) {
+            return Alert.alert("Eits!", "Mohon isi field wajib (Nama, Tanggal, Jam, Lokasi, Alamat, Harga, Kuota).");
         }
 
         const priceValue = parseInt(form.price);
+        const quotaValue = parseInt(form.total_quota);
+
         if (isNaN(priceValue)) {
             return Alert.alert("Error", "Harga harus berupa angka.");
+        }
+        if (isNaN(quotaValue)) {
+            return Alert.alert("Error", "Kuota harus berupa angka.");
         }
 
         try {
@@ -94,6 +120,10 @@ export default function EditEventScreen() {
             const { error } = await eventService.updateEvent(Number(id), {
                 ...form,
                 price: priceValue,
+                total_quota: quotaValue,
+                // Kita biarkan remaining_quota diatur oleh database saat update,
+                // tapi jika tidak ada kita kirim yang sama dengan total
+                remaining_quota: quotaValue, 
                 image_url: uploadedUrl as string,
                 status: 'pending', // Wajib pending lagi kalau diedit
             });
@@ -151,8 +181,11 @@ export default function EditEventScreen() {
 
                 <View style={styles.row}>
                     <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={styles.label}>Kategori</Text>
-                        <TextInput style={styles.input} value={form.category} onChangeText={(t) => setForm({ ...form, category: t })} />
+                        <Text style={styles.label}>Kategori *</Text>
+                        <TouchableOpacity style={styles.dropdownInput} onPress={() => setShowCategoryModal(true)}>
+                            <Text style={styles.dropdownText}>{form.category}</Text>
+                            <MaterialCommunityIcons name="chevron-down" size={20} color="#666" />
+                        </TouchableOpacity>
                     </View>
                     <View style={[styles.formGroup, { flex: 1, marginLeft: 15 }]}>
                         <Text style={styles.label}>Harga Tiket *</Text>
@@ -160,14 +193,38 @@ export default function EditEventScreen() {
                     </View>
                 </View>
 
-                <View style={styles.formGroup}>
-                    <Text style={styles.label}>Tanggal Pelaksanaan *</Text>
-                    <TextInput style={styles.input} value={form.date} onChangeText={(t) => setForm({ ...form, date: t })} />
+                <View style={styles.row}>
+                    <View style={[styles.formGroup, { flex: 1 }]}>
+                        <Text style={styles.label}>Tanggal *</Text>
+                        <TouchableOpacity style={styles.dropdownInput} onPress={() => setShowDatePicker(true)}>
+                            <Text style={[styles.dropdownText, !form.date && {color: '#999'}]}>{form.date || 'YYYY-MM-DD'}</Text>
+                            <MaterialCommunityIcons name="calendar" size={20} color="#666" />
+                        </TouchableOpacity>
+                    </View>
+                    <View style={[styles.formGroup, { flex: 1, marginLeft: 15 }]}>
+                        <Text style={styles.label}>Jam / Waktu *</Text>
+                        <TouchableOpacity style={styles.dropdownInput} onPress={() => setShowTimePicker(true)}>
+                            <Text style={[styles.dropdownText, !form.time && {color: '#999'}]}>{form.time || '19:00'}</Text>
+                            <MaterialCommunityIcons name="clock-outline" size={20} color="#666" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+
+                <View style={styles.row}>
+                    <View style={[styles.formGroup, { flex: 1 }]}>
+                        <Text style={styles.label}>Kuota Tiket *</Text>
+                        <TextInput style={styles.input} value={form.total_quota} keyboardType="numeric" onChangeText={(t) => setForm({ ...form, total_quota: t })} />
+                    </View>
                 </View>
 
                 <View style={styles.formGroup}>
                     <Text style={styles.label}>Lokasi / Venue *</Text>
                     <TextInput style={styles.input} value={form.location} onChangeText={(t) => setForm({ ...form, location: t })} />
+                </View>
+
+                <View style={styles.formGroup}>
+                    <Text style={styles.label}>Alamat Lengkap *</Text>
+                    <TextInput style={[styles.input, { height: 60, textAlignVertical: 'top' }]} value={form.address_detail} multiline onChangeText={(t) => setForm({ ...form, address_detail: t })} />
                 </View>
 
                 <View style={styles.formGroup}>
@@ -188,6 +245,42 @@ export default function EditEventScreen() {
                     )}
                 </TouchableOpacity>
             </ScrollView>
+
+            {/* Modal Kategori */}
+            <Modal visible={showCategoryModal} transparent animationType="fade">
+                <Pressable style={styles.modalOverlay} onPress={() => setShowCategoryModal(false)}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Pilih Kategori</Text>
+                        {categories.map((cat, idx) => (
+                            <TouchableOpacity
+                                key={idx}
+                                style={[styles.modalItem, form.category === cat && styles.modalItemActive]}
+                                onPress={() => {
+                                    setForm({ ...form, category: cat });
+                                    setShowCategoryModal(false);
+                                }}
+                            >
+                                <Text style={[styles.modalItemText, form.category === cat && styles.modalItemTextActive]}>{cat}</Text>
+                                {form.category === cat && <MaterialCommunityIcons name="check" size={20} color="#1E88E5" />}
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                </Pressable>
+            </Modal>
+            
+            {/* Modal Pickers */}
+            <CustomDatePicker 
+                visible={showDatePicker} 
+                onClose={() => setShowDatePicker(false)}
+                onSelect={(d) => setForm({...form, date: d})}
+                currentDate={form.date}
+            />
+            
+            <CustomTimePicker 
+                visible={showTimePicker}
+                onClose={() => setShowTimePicker(false)}
+                onSelect={(t) => setForm({...form, time: t})}
+            />
         </SafeAreaView>
     );
 }
@@ -203,11 +296,22 @@ const styles = StyleSheet.create({
     row: { flexDirection: 'row' },
     label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 },
     input: { borderWidth: 1, borderColor: '#EEE', padding: 12, borderRadius: 10, backgroundColor: '#FAFAFA' },
+    dropdownInput: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#EEE', padding: 12, borderRadius: 10, backgroundColor: '#FAFAFA' },
+    dropdownText: { color: '#333' },
     textArea: { height: 80, textAlignVertical: 'top' },
     btn: { backgroundColor: '#1E88E5', padding: 18, borderRadius: 12, alignItems: 'center', marginTop: 20, flexDirection: 'row', justifyContent: 'center', gap: 10 },
     btnText: { color: '#FFF', fontWeight: 'bold', fontSize: 16 },
     imagePicker: { width: '100%', height: 200, backgroundColor: '#F3F4F6', borderRadius: 12, overflow: 'hidden', marginBottom: 20, borderWidth: 1, borderColor: '#E5E7EB', borderStyle: 'dashed' },
     previewImage: { width: '100%', height: '100%', resizeMode: 'cover' },
     imagePlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    imagePlaceholderText: { color: '#9CA3AF', marginTop: 10, fontWeight: '500' }
+    imagePlaceholderText: { color: '#9CA3AF', marginTop: 10, fontWeight: '500' },
+    
+    // Modal styles
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+    modalContent: { backgroundColor: '#FFF', borderRadius: 15, padding: 20, width: '80%', maxHeight: '60%' },
+    modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 15 },
+    modalItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 10, borderRadius: 8, marginBottom: 4 },
+    modalItemActive: { backgroundColor: '#E3F2FD' },
+    modalItemText: { fontSize: 15, color: '#333' },
+    modalItemTextActive: { color: '#1E88E5', fontWeight: 'bold' }
 });

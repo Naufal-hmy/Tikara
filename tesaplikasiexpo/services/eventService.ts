@@ -18,10 +18,20 @@ export interface EventModel {
 }
 
 export const eventService = {
+  async getCategories(): Promise<string[]> {
+    const { data, error } = await supabase.from('categories').select('name').order('name');
+    if (error || !data || data.length === 0) {
+      // Fallback categories if table is empty or restricted
+      return ['Musik', 'Festival', 'Teater', 'Seni', 'Seminar'];
+    }
+    return data.map(c => c.name);
+  },
+
   async getAllEvents(): Promise<EventModel[]> {
     const { data, error } = await supabase
       .from('events')
       .select('*')
+      .is('deleted_at', null)
       .eq('status', 'published')
       .order('id', { ascending: true });
 
@@ -42,6 +52,20 @@ export const eventService = {
 
     events = events.filter(evt => {
       if (!evt.date) return true; // keep if no date
+
+      if (evt.date.includes('-')) {
+         const parts = evt.date.split('-');
+         if (parts.length === 3) {
+            const year = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            const day = parseInt(parts[2], 10);
+            if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+               const evtDate = new Date(year, month, day);
+               return evtDate >= today;
+            }
+         }
+      }
+
       const parts = evt.date.toLowerCase().split(' ');
       if (parts.length >= 3) {
         const day = parseInt(parts[0], 10);
@@ -65,6 +89,7 @@ export const eventService = {
     const { data, error } = await supabase
       .from('events')
       .select('*')
+      .is('deleted_at', null)
       .eq('id', numId)
       .single();
     if (error) {
@@ -133,7 +158,7 @@ export const eventService = {
 
     const { data, error } = await supabase
       .from('events')
-      .insert([{ ...eventData, organizer_id: user.id }])
+      .insert([{ ...eventData, eo_id: user.id }])
       .select();
     return { data, error };
   },
@@ -146,7 +171,7 @@ export const eventService = {
       .from('events')
       .update(eventData)
       .eq('id', id)
-      .eq('organizer_id', user.id) // Pastikan hanya EO pembuat yang bisa edit
+      .eq('eo_id', user.id) // Pastikan hanya EO pembuat yang bisa edit
       .select();
     return { data, error };
   },
@@ -158,7 +183,8 @@ export const eventService = {
     const { data, error } = await supabase
       .from('events')
       .select('*')
-      .eq('organizer_id', user.id)
+      .is('deleted_at', null)
+      .eq('eo_id', user.id)
       .order('created_at', { ascending: false });
 
     if (error) {
